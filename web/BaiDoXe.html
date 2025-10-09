@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hệ Thống Quản Lý Bãi Đỗ Xe Tự Động</title>
+    <title>Hệ Thống Quản Lý Bãi Đỗ Xe Thông Minh</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
@@ -23,140 +23,392 @@
             box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
             color: white;
         }
-        .status-card {
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .sidebar {
+            background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 50%, #3b82f6 100%);
+        }
+        .nav-item {
+            transition: all 0.3s ease;
+        }
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-left: 4px solid #fbbf24;
+        }
+        .stat-card {
             background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            transition: transform 0.3s ease;
         }
-        .temp-card {
-            background: linear-gradient(135deg, #6366f1, #4338ca);
-        }
-        .update-card {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
+        .stat-card:hover {
+            transform: translateY(-5px);
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-full">
-    <div class="container mx-auto px-4 py-8">
-        <!-- Header -->
-        <div class="text-center mb-8">
-            <h1 class="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                🚗 Hệ Thống Quản Lý Bãi Đỗ Xe Tự Động
-            </h1>
-            <p class="text-gray-600">Giám sát và quản lý bãi đỗ xe thông minh</p>
+<body class="bg-gray-100 min-h-full">
+    <!-- Sidebar -->
+    <div class="fixed left-0 top-0 h-full w-64 sidebar shadow-2xl z-50">
+        <div class="p-6">
+            <div class="flex items-center mb-8">
+                <div class="text-3xl mr-3">🚗</div>
+                <div>
+                    <h1 class="text-white font-bold text-lg">Smart Parking</h1>
+                    <p class="text-blue-200 text-sm">Quản lý thông minh</p>
+                </div>
+            </div>
+            
+            <nav class="space-y-2">
+                <div class="nav-item active rounded-lg p-3 cursor-pointer" onclick="showSection('dashboard')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📊</span>
+                        <span class="font-medium">Dashboard</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('parking')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">🅿️</span>
+                        <span class="font-medium">Bãi Đỗ Xe</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('monitoring')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📹</span>
+                        <span class="font-medium">Giám Sát</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('analytics')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📈</span>
+                        <span class="font-medium">Thống Kê</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('history')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📋</span>
+                        <span class="font-medium">Lịch Sử</span>
+                    </div>
+                </div>
+            </nav>
         </div>
+        
+        <!-- System Status -->
+        <div class="absolute bottom-6 left-6 right-6">
+            <div class="bg-white bg-opacity-10 rounded-lg p-4">
+                <div class="text-white text-sm font-medium mb-2">Trạng Thái Hệ Thống</div>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">MQTT</span>
+                        <span class="text-green-400 text-xs font-bold" id="sidebarMqttStatus">🟢 Online</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">Camera</span>
+                        <span class="text-yellow-400 text-xs font-bold">🟡 Standby</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">Barrier</span>
+                        <span class="text-green-400 text-xs font-bold">🟢 Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <!-- Dashboard Card -->
-        <div class="bg-white rounded-xl p-6 mb-6 shadow-lg border border-gray-200">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Status Section -->
-                <div class="text-center border-r border-gray-200 last:border-r-0">
-                    <div class="text-3xl mb-2">🅿️</div>
-                    <p class="text-lg font-semibold text-gray-700 mb-1">Bãi Đỗ</p>
-                    <p class="text-3xl font-bold text-blue-600" id="availableSpots">2</p>
-                    <p class="text-sm text-gray-500">chỗ trống / 4</p>
+    <!-- Main Content -->
+    <div class="ml-64 min-h-full">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800" id="pageTitle">Dashboard</h2>
+                    <p class="text-gray-600 text-sm" id="pageSubtitle">Tổng quan hệ thống bãi đỗ xe</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-gray-800" id="headerTime">--:--:--</div>
+                        <div class="text-xs text-gray-500" id="headerDate">--</div>
+                    </div>
+                    <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                        <span class="text-white font-bold">A</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Dashboard Section -->
+        <div id="dashboard-section" class="p-6">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card rounded-xl p-6 text-white shadow-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-blue-100 text-sm font-medium">Chỗ Trống</p>
+                            <p class="text-3xl font-bold" id="dashAvailableSpots">2</p>
+                            <p class="text-blue-200 text-xs">/ 4 tổng cộng</p>
+                        </div>
+                        <div class="text-4xl opacity-80">🅿️</div>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-green-100 text-sm font-medium">Đang Đỗ</p>
+                            <p class="text-3xl font-bold" id="dashOccupiedSpots">2</p>
+                            <p class="text-green-200 text-xs">xe hiện tại</p>
+                        </div>
+                        <div class="text-4xl opacity-80">🚗</div>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-purple-100 text-sm font-medium">Nhiệt Độ</p>
+                            <p class="text-3xl font-bold" id="dashTemperature">28°C</p>
+                            <p class="text-purple-200 text-xs">ESP32 Sensor</p>
+                        </div>
+                        <div class="text-4xl opacity-80">🌡️</div>
+                    </div>
+                </div>
+                
+                <div class="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg stat-card">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-orange-100 text-sm font-medium">Hôm Nay</p>
+                            <p class="text-3xl font-bold">24</p>
+                            <p class="text-orange-200 text-xs">lượt đỗ xe</p>
+                        </div>
+                        <div class="text-4xl opacity-80">📊</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Overview -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Recent Activity -->
+                <div class="glass-card rounded-xl p-6 shadow-lg">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">🔄 Hoạt Động Gần Đây</h3>
+                    <div class="space-y-3" id="recentActivity">
+                        <div class="flex items-center p-3 bg-blue-50 rounded-lg">
+                            <div class="w-2 h-2 bg-blue-500 rounded-full mr-3"></div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-800">Xe vào P2</p>
+                                <p class="text-xs text-gray-500">2 phút trước</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-3 bg-green-50 rounded-lg">
+                            <div class="w-2 h-2 bg-green-500 rounded-full mr-3"></div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-800">Xe ra P1</p>
+                                <p class="text-xs text-gray-500">5 phút trước</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-3 bg-yellow-50 rounded-lg">
+                            <div class="w-2 h-2 bg-yellow-500 rounded-full mr-3"></div>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-800">Barrier mở</p>
+                                <p class="text-xs text-gray-500">8 phút trước</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Temperature Section -->
-                <div class="text-center border-r border-gray-200 last:border-r-0">
-                    <div class="text-3xl mb-2">🌡️</div>
-                    <p class="text-lg font-semibold text-gray-700 mb-1">Nhiệt Độ</p>
-                    <p class="text-3xl font-bold text-purple-600" id="temperature">28°C</p>
-                    <p class="text-sm text-gray-500">ESP32</p>
-                </div>
-
-                <!-- Date Time Section -->
-                <div class="text-center">
-                    <div class="text-3xl mb-2">🕐</div>
-                    <p class="text-lg font-semibold text-gray-700 mb-1">Cập Nhật</p>
-                    <p class="text-2xl font-bold text-orange-600" id="currentTime">--:--:--</p>
-                    <p class="text-sm text-gray-500" id="currentDate">--</p>
+                <!-- System Health -->
+                <div class="glass-card rounded-xl p-6 shadow-lg">
+                    <h3 class="text-lg font-bold text-gray-800 mb-4">💚 Tình Trạng Hệ Thống</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-medium text-gray-800">MQTT Connection</span>
+                            </div>
+                            <span class="text-green-600 font-bold text-sm">Online</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
+                                <span class="font-medium text-gray-800">ESP32-CAM</span>
+                            </div>
+                            <span class="text-yellow-600 font-bold text-sm">Standby</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
+                                <span class="font-medium text-gray-800">Barrier System</span>
+                            </div>
+                            <span class="text-green-600 font-bold text-sm">Active</span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-blue-500 rounded-full mr-3"></div>
+                                <span class="font-medium text-gray-800">Temperature Sensor</span>
+                            </div>
+                            <span class="text-blue-600 font-bold text-sm" id="systemTemp">28°C</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
-        <!-- Parking Layout -->
-        <div class="bg-white rounded-xl p-6 mb-8 shadow-lg border border-gray-200">
-            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">Sơ Đồ Bãi Đỗ Xe & Camera Giám Sát</h2>
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- Left Side - Parking Status -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 text-gray-700 text-center">📍 Trạng Thái Chỗ Đỗ</h3>
-                    <div class="grid grid-cols-2 gap-4 mb-6">
-                        <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="1">
-                            <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">P1</div>
-                            <div class="text-sm opacity-80">Trống</div>
-                        </div>
-                        <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="2">
-                            <div class="text-2xl mb-2">🚙</div>
-                            <div class="font-semibold">P2</div>
-                            <div class="text-sm opacity-80">Có xe</div>
-                        </div>
-                        <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="3">
-                            <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">P3</div>
-                            <div class="text-sm opacity-80">Trống</div>
-                        </div>
-                        <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="4">
-                            <div class="text-2xl mb-2">🚐</div>
-                            <div class="font-semibold">P4</div>
-                            <div class="text-sm opacity-80">Có xe</div>
-                        </div>
-                    </div>
-                    
-                    <!-- License Plate Detection Display -->
-                    <div class="bg-white rounded-lg p-4 border border-gray-200">
-                        <div class="flex justify-between items-center mb-3">
-                            <h4 class="text-md font-semibold text-gray-700">📋 Biển Số Phát Hiện</h4>
-                            <span class="text-green-600 font-medium text-sm" id="mqttStatus">🔴 Chưa kết nối</span>
-                        </div>
-                        <div class="overflow-x-auto max-h-32 overflow-y-auto">
-                            <table class="w-full text-left text-sm">
-                                <thead class="sticky top-0 bg-white">
-                                    <tr class="border-b border-gray-200 bg-gray-50">
-                                        <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">⏰ Thời gian</th>
-                                        <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">🚗 Biển số</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="plateTable">
-                                    <tr class="border-b border-gray-100">
-                                        <td colspan="2" class="py-4 px-3 text-center text-gray-500 text-sm">
-                                            Chờ dữ liệu MQTT...
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+        <!-- Parking Section -->
+        <div id="parking-section" class="p-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Parking Layout -->
+                <div class="lg:col-span-2">
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-800 mb-6">🅿️ Sơ Đồ Bãi Đỗ</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="parking-spot available rounded-xl p-6 text-center cursor-pointer border-2 border-green-200" data-spot="1">
+                                <div class="text-4xl mb-3">🚗</div>
+                                <div class="font-bold text-lg">P1</div>
+                                <div class="text-sm opacity-80 mt-1">Trống</div>
+                            </div>
+                            <div class="parking-spot occupied rounded-xl p-6 text-center cursor-pointer border-2 border-red-200" data-spot="2">
+                                <div class="text-4xl mb-3">🚙</div>
+                                <div class="font-bold text-lg">P2</div>
+                                <div class="text-sm opacity-80 mt-1">Có xe</div>
+                            </div>
+                            <div class="parking-spot available rounded-xl p-6 text-center cursor-pointer border-2 border-green-200" data-spot="3">
+                                <div class="text-4xl mb-3">🚗</div>
+                                <div class="font-bold text-lg">P3</div>
+                                <div class="text-sm opacity-80 mt-1">Trống</div>
+                            </div>
+                            <div class="parking-spot occupied rounded-xl p-6 text-center cursor-pointer border-2 border-red-200" data-spot="4">
+                                <div class="text-4xl mb-3">🚐</div>
+                                <div class="font-bold text-lg">P4</div>
+                                <div class="text-sm opacity-80 mt-1">Có xe</div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Right Side - Camera Feed -->
-                <div>
-                    <h3 class="text-lg font-semibold mb-4 text-gray-700 text-center">📹 Camera ESP32-CAM</h3>
-                    <div class="bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 aspect-video flex flex-col items-center justify-center text-gray-500 mb-4">
+
+                <!-- Parking Info -->
+                <div class="space-y-6">
+                    <!-- Current Status -->
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <h4 class="font-bold text-gray-800 mb-4">📊 Trạng Thái Hiện Tại</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Tổng chỗ đỗ:</span>
+                                <span class="font-bold text-gray-800">4</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Đang sử dụng:</span>
+                                <span class="font-bold text-red-600" id="parkingOccupied">2</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Còn trống:</span>
+                                <span class="font-bold text-green-600" id="parkingAvailable">2</span>
+                            </div>
+                            <div class="border-t pt-3 mt-3">
+                                <div class="flex justify-between items-center">
+                                    <span class="text-gray-600">Tỷ lệ sử dụng:</span>
+                                    <span class="font-bold text-blue-600" id="parkingUtilization">50%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- License Plate Detection -->
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-bold text-gray-800">🔍 Biển Số Phát Hiện</h4>
+                            <span class="text-green-600 font-medium text-sm" id="plateDetectionStatus">🟢 Hoạt động</span>
+                        </div>
+                        <div class="space-y-2 max-h-48 overflow-y-auto" id="plateDetectionList">
+                            <div class="text-center text-gray-500 py-4">
+                                <div class="text-2xl mb-2">⏳</div>
+                                <p class="text-sm">Chờ dữ liệu...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monitoring Section -->
+        <div id="monitoring-section" class="p-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Camera Feed -->
+                <div class="glass-card rounded-xl p-6 shadow-lg">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">📹 Camera ESP32-CAM</h3>
+                    <div class="bg-gray-900 rounded-lg aspect-video flex flex-col items-center justify-center text-gray-400">
                         <div class="text-6xl mb-4">📷</div>
                         <div class="text-lg font-medium mb-2">ESP32-CAM Feed</div>
                         <div class="text-sm text-center px-4">
-                            Khu vực này sẽ hiển thị video trực tiếp từ camera ESP32-CAM khi được kết nối
+                            Camera sẽ hiển thị video trực tiếp khi được kết nối
                         </div>
-                        <div class="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
-                            🔗 Chờ kết nối camera...
+                        <div class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                            🔗 Đang kết nối...
                         </div>
                     </div>
-                    
-                    <!-- Barrier Status -->
-                    <div class="bg-white rounded-lg p-3 border border-gray-200">
-                        <div class="flex justify-between items-center mb-3">
-                            <h4 class="text-sm font-semibold text-gray-700">🚧 Trạng Thái Barrier</h4>
-                            <span class="text-green-600 font-medium text-xs" id="barrierConnection">🟢 Hoạt động</span>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200" id="barrierInContainer">
-                                <div class="text-xs font-medium mb-1 opacity-90">Vào</div>
-                                <div class="text-2xl font-bold" id="barrierInStatus">ĐÓNG</div>
+                </div>
+
+                <!-- Barrier Control -->
+                <div class="glass-card rounded-xl p-6 shadow-lg">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">🚧 Điều Khiển Barrier</h3>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200" id="barrierInContainer">
+                                <div class="text-sm font-bold mb-2 opacity-90">VÀO</div>
+                                <div class="text-3xl font-bold" id="barrierInStatus">ĐÓNG</div>
                             </div>
-                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200" id="barrierOutContainer">
-                                <div class="text-xs font-medium mb-1 opacity-90">Ra</div>
-                                <div class="text-2xl font-bold" id="barrierOutStatus">ĐÓNG</div>
+                            <div class="barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200" id="barrierOutContainer">
+                                <div class="text-sm font-bold mb-2 opacity-90">RA</div>
+                                <div class="text-3xl font-bold" id="barrierOutStatus">ĐÓNG</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-medium text-gray-800 mb-3">Trạng thái kết nối</h4>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600">Barrier System:</span>
+                                <span class="text-green-600 font-bold" id="barrierConnection">🟢 Hoạt động</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sensor Data -->
+            <div class="mt-6">
+                <div class="glass-card rounded-xl p-6 shadow-lg">
+                    <h3 class="text-xl font-bold text-gray-800 mb-6">📊 Dữ Liệu Cảm Biến</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-blue-100 text-sm">Nhiệt độ</p>
+                                    <p class="text-2xl font-bold" id="monitoringTemp">28°C</p>
+                                </div>
+                                <div class="text-3xl opacity-80">🌡️</div>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-lg p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-green-100 text-sm">Độ ẩm</p>
+                                    <p class="text-2xl font-bold">65%</p>
+                                </div>
+                                <div class="text-3xl opacity-80">💧</div>
+                            </div>
+                        </div>
+                        <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-purple-100 text-sm">Ánh sáng</p>
+                                    <p class="text-2xl font-bold">850 lux</p>
+                                </div>
+                                <div class="text-3xl opacity-80">☀️</div>
                             </div>
                         </div>
                     </div>
@@ -164,109 +416,60 @@
             </div>
         </div>
 
-        <!-- Charts & Data Table Combined -->
-        <div class="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-            <h2 class="text-2xl font-bold mb-6 text-center text-gray-800">📊 Biểu Đồ & Lịch Sử Đỗ Xe</h2>
-            <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                <!-- Left Side - Charts -->
-                <div>
-                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-3">
-                        <h3 class="text-lg font-semibold text-gray-700">📈 Biểu Đồ Sử Dụng</h3>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <select id="chartFilter" class="px-2 py-1 bg-gray-50 border border-gray-300 rounded text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="updateChart()">
-                                <option value="hour">Theo giờ</option>
-                                <option value="day">Theo ngày</option>
-                                <option value="week">Theo tuần</option>
-                                <option value="month">Theo tháng</option>
-                            </select>
-                            <input type="date" id="startDate" class="px-2 py-1 bg-gray-50 border border-gray-300 rounded text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <input type="date" id="endDate" class="px-2 py-1 bg-gray-50 border border-gray-300 rounded text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <button onclick="filterChartData()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-medium text-sm transition-colors">
-                                🔍
-                            </button>
-                        </div>
+        <!-- Analytics Section -->
+        <div id="analytics-section" class="p-6 hidden">
+            <div class="glass-card rounded-xl p-6 shadow-lg mb-6">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                    <h3 class="text-xl font-bold text-gray-800">📈 Biểu Đồ Thống Kê</h3>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <select id="chartFilter" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="updateChart()">
+                            <option value="hour">Theo giờ</option>
+                            <option value="day">Theo ngày</option>
+                            <option value="week">Theo tuần</option>
+                            <option value="month">Theo tháng</option>
+                        </select>
+                        <input type="date" id="startDate" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <input type="date" id="endDate" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button onclick="filterChartData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                            🔍 Lọc
+                        </button>
                     </div>
-                    <canvas id="usageChart" width="400" height="300"></canvas>
-                    <div id="chartDateRange" class="mt-3 text-center text-gray-600 text-sm font-medium"></div>
                 </div>
-                
-                <!-- Right Side - Data Table -->
-                <div>
-                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-4 gap-3">
-                        <h3 class="text-lg font-semibold text-gray-700">📋 Lịch Sử Gần Đây</h3>
-                        <div class="flex items-center gap-2">
-                            <input type="text" id="searchInput" placeholder="Tìm kiếm..." class="px-3 py-1 bg-gray-50 border border-gray-300 rounded text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-32" oninput="searchData()">
-                            <select id="statusFilter" class="px-2 py-1 bg-gray-50 border border-gray-300 rounded text-gray-700 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="searchData()">
-                                <option value="all">Tất cả</option>
-                                <option value="occupied">Đang đỗ</option>
-                                <option value="completed">Hoàn thành</option>
-                            </select>
-                        </div>
+                <canvas id="usageChart" width="400" height="200"></canvas>
+                <div id="chartDateRange" class="mt-4 text-center text-gray-600 font-medium"></div>
+            </div>
+        </div>
+
+        <!-- History Section -->
+        <div id="history-section" class="p-6 hidden">
+            <div class="glass-card rounded-xl p-6 shadow-lg">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                    <h3 class="text-xl font-bold text-gray-800">📋 Lịch Sử Đỗ Xe</h3>
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="searchInput" placeholder="Tìm kiếm..." class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" oninput="searchData()">
+                        <select id="statusFilter" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="searchData()">
+                            <option value="all">Tất cả</option>
+                            <option value="occupied">Đang đỗ</option>
+                            <option value="completed">Hoàn thành</option>
+                        </select>
                     </div>
-                    <div class="overflow-x-auto max-h-96 overflow-y-auto">
-                        <table class="w-full text-left text-sm">
-                            <thead class="sticky top-0 bg-white">
-                                <tr class="border-b-2 border-gray-200 bg-gray-50">
-                                    <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">🚗 Chỗ</th>
-                                    <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">⏰ Vào</th>
-                                    <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">🚪 Ra</th>
-                                    <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">⏱️ Thời gian</th>
-                                    <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">📊 Trạng thái</th>
-                                </tr>
-                            </thead>
-                            <tbody id="dataTable">
-                                <tr class="border-b border-gray-100 bg-blue-50 hover:bg-blue-100">
-                                    <td class="py-2 px-3 text-blue-800 font-medium">P2</td>
-                                    <td class="py-2 px-3 text-blue-700">08:30</td>
-                                    <td class="py-2 px-3 text-blue-700">-</td>
-                                    <td class="py-2 px-3 text-blue-700">2h 15m</td>
-                                    <td class="py-2 px-3"><span class="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Đang đỗ</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 bg-blue-50 hover:bg-blue-100">
-                                    <td class="py-2 px-3 text-blue-800 font-medium">P4</td>
-                                    <td class="py-2 px-3 text-blue-700">09:15</td>
-                                    <td class="py-2 px-3 text-blue-700">-</td>
-                                    <td class="py-2 px-3 text-blue-700">1h 30m</td>
-                                    <td class="py-2 px-3"><span class="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Đang đỗ</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">P1</td>
-                                    <td class="py-2 px-3 text-gray-600">07:00</td>
-                                    <td class="py-2 px-3 text-gray-600">09:30</td>
-                                    <td class="py-2 px-3 text-gray-600">2h 30m</td>
-                                    <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">P3</td>
-                                    <td class="py-2 px-3 text-gray-600">06:45</td>
-                                    <td class="py-2 px-3 text-gray-600">08:15</td>
-                                    <td class="py-2 px-3 text-gray-600">1h 30m</td>
-                                    <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">P2</td>
-                                    <td class="py-2 px-3 text-gray-600">05:30</td>
-                                    <td class="py-2 px-3 text-gray-600">07:45</td>
-                                    <td class="py-2 px-3 text-gray-600">2h 15m</td>
-                                    <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">P1</td>
-                                    <td class="py-2 px-3 text-gray-600">04:15</td>
-                                    <td class="py-2 px-3 text-gray-600">06:30</td>
-                                    <td class="py-2 px-3 text-gray-600">2h 15m</td>
-                                    <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
-                                </tr>
-                                <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">P4</td>
-                                    <td class="py-2 px-3 text-gray-600">03:00</td>
-                                    <td class="py-2 px-3 text-gray-600">05:45</td>
-                                    <td class="py-2 px-3 text-gray-600">2h 45m</td>
-                                    <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b-2 border-gray-200 bg-gray-50">
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">🚗 Chỗ đỗ</th>
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">🔢 Biển số</th>
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">⏰ Giờ vào</th>
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">🚪 Giờ ra</th>
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">⏱️ Thời gian</th>
+                                <th class="pb-3 pt-3 px-4 font-bold text-gray-700">📊 Trạng thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTable" class="divide-y divide-gray-100">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -284,13 +487,14 @@
             {id: 7, licensePlate: '77G-55555', spot: 4, checkIn: '03:00', checkOut: '05:45', fee: 45000, status: 'completed'}
         ];
 
-        // MQTT simulation variables
+        // Navigation and UI variables
+        let currentSection = 'dashboard';
         let mqttConnected = false;
         let detectedPlates = [];
         let barrierInOpen = false;
         let barrierOutOpen = false;
 
-        // Chart data for different time periods - usage rate only
+        // Chart data for different time periods
         const chartData = {
             hour: {
                 labels: ['6h', '7h', '8h', '9h', '10h', '11h', '12h', '13h', '14h', '15h', '16h', '17h'],
@@ -320,9 +524,38 @@
 
         let usageChart;
 
+        // Navigation function
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('[id$="-section"]').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // Show selected section
+            document.getElementById(sectionName + '-section').classList.remove('hidden');
+            
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.nav-item').classList.add('active');
+            
+            // Update page title
+            const titles = {
+                'dashboard': { title: 'Dashboard', subtitle: 'Tổng quan hệ thống bãi đỗ xe' },
+                'parking': { title: 'Bãi Đỗ Xe', subtitle: 'Quản lý và giám sát chỗ đỗ xe' },
+                'monitoring': { title: 'Giám Sát', subtitle: 'Camera và điều khiển barrier' },
+                'analytics': { title: 'Thống Kê', subtitle: 'Phân tích dữ liệu sử dụng' },
+                'history': { title: 'Lịch Sử', subtitle: 'Lịch sử đỗ xe và giao dịch' }
+            };
+            
+            document.getElementById('pageTitle').textContent = titles[sectionName].title;
+            document.getElementById('pageSubtitle').textContent = titles[sectionName].subtitle;
+            currentSection = sectionName;
+        }
+
         // Initialize charts
         function initCharts() {
-            // Usage Chart
             const usageCtx = document.getElementById('usageChart').getContext('2d');
             usageChart = new Chart(usageCtx, {
                 type: 'line',
@@ -348,22 +581,7 @@
                         legend: {
                             labels: {
                                 color: '#374151',
-                                font: {
-                                    size: 14,
-                                    weight: 'bold'
-                                }
-                            }
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            titleColor: '#ffffff',
-                            bodyColor: '#ffffff',
-                            borderColor: '#374151',
-                            borderWidth: 1,
-                            callbacks: {
-                                label: function(context) {
-                                    return context.dataset.label + ': ' + context.parsed.y + '%';
-                                }
+                                font: { size: 14, weight: 'bold' }
                             }
                         }
                     },
@@ -373,30 +591,10 @@
                             max: 100,
                             ticks: {
                                 color: '#374151',
-                                font: {
-                                    size: 12,
-                                    weight: '500'
-                                },
-                                callback: function(value) {
-                                    return value + '%';
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(156, 163, 175, 0.3)'
+                                callback: function(value) { return value + '%'; }
                             }
                         },
-                        x: {
-                            ticks: {
-                                color: '#374151',
-                                font: {
-                                    size: 12,
-                                    weight: '500'
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(156, 163, 175, 0.3)'
-                            }
-                        }
+                        x: { ticks: { color: '#374151' } }
                     }
                 }
             });
@@ -412,10 +610,9 @@
             usageChart.data.datasets[0].label = selectedData.label;
             usageChart.update();
             
-            // Update date range display
             document.getElementById('chartDateRange').textContent = selectedData.dateRange;
         }
-        
+
         // Filter chart data by date range
         function filterChartData() {
             const startDate = document.getElementById('startDate').value;
@@ -430,7 +627,6 @@
                 
                 document.getElementById('chartDateRange').textContent = `${startFormatted} - ${endFormatted}`;
                 
-                // Simulate filtered data (in real app, this would filter actual data)
                 const selectedData = chartData[filterValue];
                 usageChart.data.labels = selectedData.labels;
                 usageChart.data.datasets[0].data = selectedData.data.map(val => Math.floor(val * (0.7 + Math.random() * 0.6)));
@@ -439,7 +635,7 @@
                 updateChart();
             }
         }
-        
+
         // Search function for data table
         function searchData() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
@@ -447,7 +643,6 @@
             
             let filteredData = [...parkingData];
             
-            // Filter by search term
             if (searchTerm) {
                 filteredData = filteredData.filter(record => 
                     record.spot.toString().includes(searchTerm) ||
@@ -457,7 +652,6 @@
                 );
             }
             
-            // Filter by status
             if (statusFilter !== 'all') {
                 filteredData = filteredData.filter(record => record.status === statusFilter);
             }
@@ -465,46 +659,48 @@
             updateDataTableWithFilter(filteredData);
         }
 
-        // Simulate temperature updates from ESP32
+        // Update temperature
         function updateTemperature() {
-            const temp = Math.floor(Math.random() * 10) + 25; // 25-35°C
-            document.getElementById('temperature').textContent = temp + '°C';
+            const temp = Math.floor(Math.random() * 10) + 25;
+            const tempStr = temp + '°C';
+            document.getElementById('dashTemperature').textContent = tempStr;
+            document.getElementById('systemTemp').textContent = tempStr;
+            document.getElementById('monitoringTemp').textContent = tempStr;
         }
 
-        // Update current date and time
+        // Update date and time
         function updateDateTime() {
             const now = new Date();
-            const timeOptions = { 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit',
-                hour12: false
-            };
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+            const dateOptions = { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' };
             
-            const dateOptions = {
-                weekday: 'short',
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric'
-            };
+            const timeStr = now.toLocaleTimeString('vi-VN', timeOptions);
+            const dateStr = now.toLocaleDateString('vi-VN', dateOptions);
             
-            // Display current real date and time
-            document.getElementById('currentDate').textContent = now.toLocaleDateString('vi-VN', dateOptions);
-            document.getElementById('currentTime').textContent = now.toLocaleTimeString('vi-VN', timeOptions);
+            document.getElementById('headerTime').textContent = timeStr;
+            document.getElementById('headerDate').textContent = dateStr;
         }
 
-        // Update parking spot status
+        // Update parking status
         function updateParkingStatus() {
             const spots = document.querySelectorAll('.parking-spot');
             let availableCount = 0;
+            let occupiedCount = 0;
             
             spots.forEach(spot => {
                 if (spot.classList.contains('available')) {
                     availableCount++;
+                } else {
+                    occupiedCount++;
                 }
             });
             
-            document.getElementById('availableSpots').textContent = availableCount;
+            // Update all status displays
+            document.getElementById('dashAvailableSpots').textContent = availableCount;
+            document.getElementById('dashOccupiedSpots').textContent = occupiedCount;
+            document.getElementById('parkingAvailable').textContent = availableCount;
+            document.getElementById('parkingOccupied').textContent = occupiedCount;
+            document.getElementById('parkingUtilization').textContent = Math.round((occupiedCount / 4) * 100) + '%';
         }
 
         // Toggle parking spot status
@@ -519,7 +715,6 @@
                 spotElement.classList.add('border-red-200');
                 statusText.textContent = 'Có xe';
                 
-                // Add new parking record
                 const newRecord = {
                     id: Date.now(),
                     licensePlate: generateLicensePlate(),
@@ -537,12 +732,11 @@
                 spotElement.classList.add('border-green-200');
                 statusText.textContent = 'Trống';
                 
-                // Update existing record
                 const record = parkingData.find(r => r.spot === parseInt(spotNumber) && r.status === 'occupied');
                 if (record) {
                     record.checkOut = new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
                     record.status = 'completed';
-                    record.fee = Math.floor(Math.random() * 50000) + 20000; // Random fee 20k-70k
+                    record.fee = Math.floor(Math.random() * 50000) + 20000;
                 }
             }
             
@@ -565,7 +759,7 @@
             if (filteredData.length === 0) {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td colspan="5" class="py-8 px-4 text-center text-gray-500">
+                    <td colspan="6" class="py-8 px-4 text-center text-gray-500">
                         <div class="text-4xl mb-2">🔍</div>
                         <div class="font-medium">Không tìm thấy dữ liệu phù hợp</div>
                         <div class="text-sm">Thử thay đổi điều kiện lọc</div>
@@ -575,27 +769,20 @@
                 return;
             }
             
-            // Sort filtered data: occupied spots (1-6) first, then completed by most recent
             const sortedFilteredData = [...filteredData].sort((a, b) => {
-                // First priority: occupied status for spots 1-4
                 const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 4 && a.status === 'occupied';
                 const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 4 && b.status === 'occupied';
                 
                 if (aIsCurrentOccupied && !bIsCurrentOccupied) return -1;
                 if (!aIsCurrentOccupied && bIsCurrentOccupied) return 1;
                 
-                // If both are current occupied or both are not, sort by ID (most recent first)
                 return b.id - a.id;
             });
             
-            sortedFilteredData.slice(0, 10).forEach(record => {
+            sortedFilteredData.slice(0, 15).forEach(record => {
                 const row = document.createElement('tr');
-                
-                // Add blue background for current parking spots (1-4) with occupied status
                 const isCurrentSpot = record.spot >= 1 && record.spot <= 4 && record.status === 'occupied';
-                const rowClass = isCurrentSpot 
-                    ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
-                    : 'border-b border-gray-100 hover:bg-gray-50';
+                const rowClass = isCurrentSpot ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50';
                 
                 row.className = rowClass;
                 
@@ -603,16 +790,16 @@
                 const statusClass = record.status === 'occupied' ? 'bg-red-500' : 'bg-green-500';
                 const statusText = record.status === 'occupied' ? 'Đang đỗ' : 'Hoàn thành';
                 
-                // Add blue text for current spots
                 const textClass = isCurrentSpot ? 'text-blue-800 font-medium' : 'text-gray-800';
                 const subTextClass = isCurrentSpot ? 'text-blue-700' : 'text-gray-600';
                 
                 row.innerHTML = `
-                    <td class="py-2 px-3 ${textClass}">P${record.spot}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${record.checkIn}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${record.checkOut || '-'}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${duration}</td>
-                    <td class="py-2 px-3"><span class="${statusClass} text-white px-2 py-1 rounded-full text-xs font-semibold">${statusText}</span></td>
+                    <td class="py-3 px-4 ${textClass}">P${record.spot}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${record.licensePlate}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${record.checkIn}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${record.checkOut || '-'}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${duration}</td>
+                    <td class="py-3 px-4"><span class="${statusClass} text-white px-3 py-1 rounded-full text-xs font-semibold">${statusText}</span></td>
                 `;
                 
                 tableBody.appendChild(row);
@@ -621,51 +808,7 @@
 
         // Update data table
         function updateDataTable() {
-            const tableBody = document.getElementById('dataTable');
-            tableBody.innerHTML = '';
-            
-            // Sort data: occupied spots (1-6) first, then completed by most recent
-            const sortedData = [...parkingData].sort((a, b) => {
-                // First priority: occupied status for spots 1-4
-                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 4 && a.status === 'occupied';
-                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 4 && b.status === 'occupied';
-                
-                if (aIsCurrentOccupied && !bIsCurrentOccupied) return -1;
-                if (!aIsCurrentOccupied && bIsCurrentOccupied) return 1;
-                
-                // If both are current occupied or both are not, sort by ID (most recent first)
-                return b.id - a.id;
-            });
-            
-            sortedData.slice(0, 10).forEach(record => {
-                const row = document.createElement('tr');
-                
-                // Add blue background for current parking spots (1-4) with occupied status
-                const isCurrentSpot = record.spot >= 1 && record.spot <= 4 && record.status === 'occupied';
-                const rowClass = isCurrentSpot 
-                    ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
-                    : 'border-b border-gray-100 hover:bg-gray-50';
-                
-                row.className = rowClass;
-                
-                const duration = record.checkOut ? calculateDuration(record.checkIn, record.checkOut) : calculateDuration(record.checkIn, new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'}));
-                const statusClass = record.status === 'occupied' ? 'bg-red-500' : 'bg-green-500';
-                const statusText = record.status === 'occupied' ? 'Đang đỗ' : 'Hoàn thành';
-                
-                // Add blue text for current spots
-                const textClass = isCurrentSpot ? 'text-blue-800 font-medium' : 'text-gray-800';
-                const subTextClass = isCurrentSpot ? 'text-blue-700' : 'text-gray-600';
-                
-                row.innerHTML = `
-                    <td class="py-2 px-3 ${textClass}">P${record.spot}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${record.checkIn}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${record.checkOut || '-'}</td>
-                    <td class="py-2 px-3 ${subTextClass}">${duration}</td>
-                    <td class="py-2 px-3"><span class="${statusClass} text-white px-2 py-1 rounded-full text-xs font-semibold">${statusText}</span></td>
-                `;
-                
-                tableBody.appendChild(row);
-            });
+            updateDataTableWithFilter(parkingData);
         }
 
         // Calculate duration between two times
@@ -678,20 +821,17 @@
             return `${hours}h ${minutes}m`;
         }
 
-        // Simulate MQTT connection and license plate detection
+        // Simulate MQTT connection
         function simulateMQTTConnection() {
-            // Simulate connection after 3 seconds
             setTimeout(() => {
                 mqttConnected = true;
-                document.getElementById('mqttStatus').innerHTML = '🟢 Đã kết nối';
-                document.getElementById('mqttStatus').className = 'text-green-600 font-medium';
-                
-                // Start simulating license plate detection
+                document.getElementById('sidebarMqttStatus').innerHTML = '🟢 Online';
+                document.getElementById('plateDetectionStatus').innerHTML = '🟢 Hoạt động';
                 simulateLicensePlateDetection();
             }, 3000);
         }
 
-        // Simulate license plate detection from MQTT
+        // Simulate license plate detection
         function simulateLicensePlateDetection() {
             const samplePlates = ['29A-12345', '30B-67890', '51C-11111', '43D-22222', '77E-55555', '88F-66666'];
             
@@ -700,81 +840,65 @@
                     const randomPlate = samplePlates[Math.floor(Math.random() * samplePlates.length)];
                     updateDetectedPlate(randomPlate);
                 }
-            }, 8000); // Update every 8 seconds
+            }, 8000);
         }
 
         // Update detected license plate display
         function updateDetectedPlate(plateNumber) {
             const now = new Date();
             const timestamp = now.toLocaleTimeString('vi-VN', {
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit'
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             
-            // Add new plate to the beginning of array
             detectedPlates.unshift({
                 plate: plateNumber,
                 time: timestamp,
                 id: Date.now()
             });
             
-            // Keep only last 5 detections
             if (detectedPlates.length > 5) {
                 detectedPlates = detectedPlates.slice(0, 5);
             }
             
-            updatePlateTable();
+            updatePlateDetectionList();
         }
 
-        // Update plate detection table
-        function updatePlateTable() {
-            const tableBody = document.getElementById('plateTable');
-            tableBody.innerHTML = '';
+        // Update plate detection list
+        function updatePlateDetectionList() {
+            const listContainer = document.getElementById('plateDetectionList');
+            listContainer.innerHTML = '';
             
             if (detectedPlates.length === 0) {
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td colspan="2" class="py-4 px-3 text-center text-gray-500 text-sm">
-                        Chờ dữ liệu MQTT...
-                    </td>
+                listContainer.innerHTML = `
+                    <div class="text-center text-gray-500 py-4">
+                        <div class="text-2xl mb-2">⏳</div>
+                        <p class="text-sm">Chờ dữ liệu...</p>
+                    </div>
                 `;
-                tableBody.appendChild(row);
                 return;
             }
             
             detectedPlates.forEach((detection, index) => {
-                const row = document.createElement('tr');
                 const isLatest = index === 0;
-                const rowClass = isLatest 
-                    ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
-                    : 'border-b border-gray-100 hover:bg-gray-50';
-                
-                row.className = rowClass;
-                
+                const bgClass = isLatest ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200';
                 const textClass = isLatest ? 'text-blue-800 font-medium' : 'text-gray-800';
-                const subTextClass = isLatest ? 'text-blue-700' : 'text-gray-600';
                 
-                row.innerHTML = `
-                    <td class="py-2 px-3 ${subTextClass}">${detection.time}</td>
-                    <td class="py-2 px-3 ${textClass}">${detection.plate}</td>
+                const item = document.createElement('div');
+                item.className = `flex justify-between items-center p-3 rounded-lg border ${bgClass}`;
+                item.innerHTML = `
+                    <span class="${textClass}">${detection.plate}</span>
+                    <span class="text-xs text-gray-500">${detection.time}</span>
                 `;
-                
-                tableBody.appendChild(row);
+                listContainer.appendChild(item);
             });
         }
 
         // Simulate barrier operations
         function simulateBarrierOperations() {
             setInterval(() => {
-                // Randomly toggle barriers
-                if (Math.random() < 0.3) { // 30% chance every interval
-                    toggleBarrier('in');
-                }
-                if (Math.random() < 0.25) { // 25% chance every interval
-                    toggleBarrier('out');
-                }
-            }, 12000); // Check every 12 seconds
+                if (Math.random() < 0.3) toggleBarrier('in');
+                if (Math.random() < 0.25) toggleBarrier('out');
+            }, 12000);
         }
 
         // Toggle barrier status
@@ -785,18 +909,17 @@
                 const status = document.getElementById('barrierInStatus');
                 
                 if (barrierInOpen) {
-                    container.className = 'barrier-status bg-green-500 rounded-lg p-3 text-center text-white border-2 border-green-200';
+                    container.className = 'barrier-status bg-green-500 rounded-xl p-4 text-center text-white border-2 border-green-200';
                     status.textContent = 'MỞ';
                 } else {
-                    container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                    container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
                     status.textContent = 'ĐÓNG';
                 }
                 
-                // Auto close after 5 seconds if opened
                 if (barrierInOpen) {
                     setTimeout(() => {
                         barrierInOpen = false;
-                        container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                        container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
                         status.textContent = 'ĐÓNG';
                     }, 5000);
                 }
@@ -806,18 +929,17 @@
                 const status = document.getElementById('barrierOutStatus');
                 
                 if (barrierOutOpen) {
-                    container.className = 'barrier-status bg-green-500 rounded-lg p-3 text-center text-white border-2 border-green-200';
+                    container.className = 'barrier-status bg-green-500 rounded-xl p-4 text-center text-white border-2 border-green-200';
                     status.textContent = 'MỞ';
                 } else {
-                    container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                    container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
                     status.textContent = 'ĐÓNG';
                 }
                 
-                // Auto close after 5 seconds if opened
                 if (barrierOutOpen) {
                     setTimeout(() => {
                         barrierOutOpen = false;
-                        container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                        container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
                         status.textContent = 'ĐÓNG';
                     }, 5000);
                 }
@@ -844,18 +966,16 @@
             updateParkingStatus();
             updateDataTable();
             updateDateTime();
-            updateChart(); // Initialize chart with date range
+            updateChart();
             
-            // Start MQTT simulation
+            // Start simulations
             simulateMQTTConnection();
-            
-            // Start barrier simulation
             simulateBarrierOperations();
             
-            // Simulate real-time updates
-            setInterval(updateTemperature, 5000); // Update temperature every 5 seconds
-            setInterval(updateDateTime, 1000); // Update date/time every second
+            // Real-time updates
+            setInterval(updateTemperature, 5000);
+            setInterval(updateDateTime, 1000);
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98bc91cc61ef0988',t:'MTc1OTk5OTE4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98bbf4e503da84af',t:'MTc1OTk5Mjc2MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
