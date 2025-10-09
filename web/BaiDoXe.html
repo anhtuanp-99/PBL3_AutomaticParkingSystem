@@ -7,6 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
+        body {
+            box-sizing: border-box;
+        }
         .parking-spot {
             transition: all 0.3s ease;
         }
@@ -31,7 +34,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-full">
     <div class="container mx-auto px-4 py-8">
         <!-- Header -->
         <div class="text-center mb-8">
@@ -48,8 +51,8 @@
                 <div class="text-center border-r border-gray-200 last:border-r-0">
                     <div class="text-3xl mb-2">🅿️</div>
                     <p class="text-lg font-semibold text-gray-700 mb-1">Bãi Đỗ</p>
-                    <p class="text-3xl font-bold text-blue-600" id="availableSpots">4</p>
-                    <p class="text-sm text-gray-500">chỗ trống / 6</p>
+                    <p class="text-3xl font-bold text-blue-600" id="availableSpots">2</p>
+                    <p class="text-sm text-gray-500">chỗ trống / 4</p>
                 </div>
 
                 <!-- Temperature Section -->
@@ -77,36 +80,51 @@
                 <!-- Left Side - Parking Status -->
                 <div>
                     <h3 class="text-lg font-semibold mb-4 text-gray-700 text-center">📍 Trạng Thái Chỗ Đỗ</h3>
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-2 gap-4 mb-6">
                         <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="1">
                             <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">Chỗ 1</div>
+                            <div class="font-semibold">P1</div>
                             <div class="text-sm opacity-80">Trống</div>
                         </div>
                         <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="2">
                             <div class="text-2xl mb-2">🚙</div>
-                            <div class="font-semibold">Chỗ 2</div>
+                            <div class="font-semibold">P2</div>
                             <div class="text-sm opacity-80">Có xe</div>
                         </div>
                         <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="3">
                             <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">Chỗ 3</div>
+                            <div class="font-semibold">P3</div>
                             <div class="text-sm opacity-80">Trống</div>
                         </div>
                         <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="4">
                             <div class="text-2xl mb-2">🚐</div>
-                            <div class="font-semibold">Chỗ 4</div>
+                            <div class="font-semibold">P4</div>
                             <div class="text-sm opacity-80">Có xe</div>
                         </div>
-                        <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="5">
-                            <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">Chỗ 5</div>
-                            <div class="text-sm opacity-80">Trống</div>
+                    </div>
+                    
+                    <!-- License Plate Detection Display -->
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-md font-semibold text-gray-700">📋 Biển Số Phát Hiện</h4>
+                            <span class="text-green-600 font-medium text-sm" id="mqttStatus">🔴 Chưa kết nối</span>
                         </div>
-                        <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="6">
-                            <div class="text-2xl mb-2">🚗</div>
-                            <div class="font-semibold">Chỗ 6</div>
-                            <div class="text-sm opacity-80">Trống</div>
+                        <div class="overflow-x-auto max-h-32 overflow-y-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="sticky top-0 bg-white">
+                                    <tr class="border-b border-gray-200 bg-gray-50">
+                                        <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">⏰ Thời gian</th>
+                                        <th class="pb-2 pt-2 px-3 font-semibold text-gray-700">🚗 Biển số</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="plateTable">
+                                    <tr class="border-b border-gray-100">
+                                        <td colspan="2" class="py-4 px-3 text-center text-gray-500 text-sm">
+                                            Chờ dữ liệu MQTT...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -114,7 +132,7 @@
                 <!-- Right Side - Camera Feed -->
                 <div>
                     <h3 class="text-lg font-semibold mb-4 text-gray-700 text-center">📹 Camera ESP32-CAM</h3>
-                    <div class="bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 aspect-video flex flex-col items-center justify-center text-gray-500">
+                    <div class="bg-gray-100 rounded-lg border-2 border-dashed border-gray-300 aspect-video flex flex-col items-center justify-center text-gray-500 mb-4">
                         <div class="text-6xl mb-4">📷</div>
                         <div class="text-lg font-medium mb-2">ESP32-CAM Feed</div>
                         <div class="text-sm text-center px-4">
@@ -122,6 +140,24 @@
                         </div>
                         <div class="mt-4 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium">
                             🔗 Chờ kết nối camera...
+                        </div>
+                    </div>
+                    
+                    <!-- Barrier Status -->
+                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="text-sm font-semibold text-gray-700">🚧 Trạng Thái Barrier</h4>
+                            <span class="text-green-600 font-medium text-xs" id="barrierConnection">🟢 Hoạt động</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200" id="barrierInContainer">
+                                <div class="text-xs font-medium mb-1 opacity-90">Vào</div>
+                                <div class="text-2xl font-bold" id="barrierInStatus">ĐÓNG</div>
+                            </div>
+                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200" id="barrierOutContainer">
+                                <div class="text-xs font-medium mb-1 opacity-90">Ra</div>
+                                <div class="text-2xl font-bold" id="barrierOutStatus">ĐÓNG</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -180,49 +216,49 @@
                             </thead>
                             <tbody id="dataTable">
                                 <tr class="border-b border-gray-100 bg-blue-50 hover:bg-blue-100">
-                                    <td class="py-2 px-3 text-blue-800 font-medium">Chỗ 2</td>
+                                    <td class="py-2 px-3 text-blue-800 font-medium">P2</td>
                                     <td class="py-2 px-3 text-blue-700">08:30</td>
                                     <td class="py-2 px-3 text-blue-700">-</td>
                                     <td class="py-2 px-3 text-blue-700">2h 15m</td>
                                     <td class="py-2 px-3"><span class="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Đang đỗ</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 bg-blue-50 hover:bg-blue-100">
-                                    <td class="py-2 px-3 text-blue-800 font-medium">Chỗ 4</td>
+                                    <td class="py-2 px-3 text-blue-800 font-medium">P4</td>
                                     <td class="py-2 px-3 text-blue-700">09:15</td>
                                     <td class="py-2 px-3 text-blue-700">-</td>
                                     <td class="py-2 px-3 text-blue-700">1h 30m</td>
                                     <td class="py-2 px-3"><span class="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Đang đỗ</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">Chỗ 1</td>
+                                    <td class="py-2 px-3 text-gray-800">P1</td>
                                     <td class="py-2 px-3 text-gray-600">07:00</td>
                                     <td class="py-2 px-3 text-gray-600">09:30</td>
                                     <td class="py-2 px-3 text-gray-600">2h 30m</td>
                                     <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">Chỗ 3</td>
+                                    <td class="py-2 px-3 text-gray-800">P3</td>
                                     <td class="py-2 px-3 text-gray-600">06:45</td>
                                     <td class="py-2 px-3 text-gray-600">08:15</td>
                                     <td class="py-2 px-3 text-gray-600">1h 30m</td>
                                     <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">Chỗ 5</td>
+                                    <td class="py-2 px-3 text-gray-800">P2</td>
                                     <td class="py-2 px-3 text-gray-600">05:30</td>
                                     <td class="py-2 px-3 text-gray-600">07:45</td>
                                     <td class="py-2 px-3 text-gray-600">2h 15m</td>
                                     <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">Chỗ 6</td>
+                                    <td class="py-2 px-3 text-gray-800">P1</td>
                                     <td class="py-2 px-3 text-gray-600">04:15</td>
                                     <td class="py-2 px-3 text-gray-600">06:30</td>
                                     <td class="py-2 px-3 text-gray-600">2h 15m</td>
                                     <td class="py-2 px-3"><span class="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-semibold">Hoàn thành</span></td>
                                 </tr>
                                 <tr class="border-b border-gray-100 hover:bg-gray-50">
-                                    <td class="py-2 px-3 text-gray-800">Chỗ 1</td>
+                                    <td class="py-2 px-3 text-gray-800">P4</td>
                                     <td class="py-2 px-3 text-gray-600">03:00</td>
                                     <td class="py-2 px-3 text-gray-600">05:45</td>
                                     <td class="py-2 px-3 text-gray-600">2h 45m</td>
@@ -243,8 +279,16 @@
             {id: 2, licensePlate: '30B-67890', spot: 4, checkIn: '09:15', checkOut: null, fee: 30000, status: 'occupied'},
             {id: 3, licensePlate: '51C-11111', spot: 1, checkIn: '07:00', checkOut: '09:30', fee: 50000, status: 'completed'},
             {id: 4, licensePlate: '43D-22222', spot: 3, checkIn: '06:45', checkOut: '08:15', fee: 30000, status: 'completed'},
-            {id: 5, licensePlate: '29E-33333', spot: 5, checkIn: '05:30', checkOut: '07:45', fee: 45000, status: 'completed'}
+            {id: 5, licensePlate: '29E-33333', spot: 2, checkIn: '05:30', checkOut: '07:45', fee: 45000, status: 'completed'},
+            {id: 6, licensePlate: '51F-44444', spot: 1, checkIn: '04:15', checkOut: '06:30', fee: 35000, status: 'completed'},
+            {id: 7, licensePlate: '77G-55555', spot: 4, checkIn: '03:00', checkOut: '05:45', fee: 45000, status: 'completed'}
         ];
+
+        // MQTT simulation variables
+        let mqttConnected = false;
+        let detectedPlates = [];
+        let barrierInOpen = false;
+        let barrierOutOpen = false;
 
         // Chart data for different time periods - usage rate only
         const chartData = {
@@ -533,9 +577,9 @@
             
             // Sort filtered data: occupied spots (1-6) first, then completed by most recent
             const sortedFilteredData = [...filteredData].sort((a, b) => {
-                // First priority: occupied status for spots 1-6
-                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 6 && a.status === 'occupied';
-                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 6 && b.status === 'occupied';
+                // First priority: occupied status for spots 1-4
+                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 4 && a.status === 'occupied';
+                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 4 && b.status === 'occupied';
                 
                 if (aIsCurrentOccupied && !bIsCurrentOccupied) return -1;
                 if (!aIsCurrentOccupied && bIsCurrentOccupied) return 1;
@@ -547,8 +591,8 @@
             sortedFilteredData.slice(0, 10).forEach(record => {
                 const row = document.createElement('tr');
                 
-                // Add blue background for current parking spots (1-6) with occupied status
-                const isCurrentSpot = record.spot >= 1 && record.spot <= 6 && record.status === 'occupied';
+                // Add blue background for current parking spots (1-4) with occupied status
+                const isCurrentSpot = record.spot >= 1 && record.spot <= 4 && record.status === 'occupied';
                 const rowClass = isCurrentSpot 
                     ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
                     : 'border-b border-gray-100 hover:bg-gray-50';
@@ -564,7 +608,7 @@
                 const subTextClass = isCurrentSpot ? 'text-blue-700' : 'text-gray-600';
                 
                 row.innerHTML = `
-                    <td class="py-2 px-3 ${textClass}">Chỗ ${record.spot}</td>
+                    <td class="py-2 px-3 ${textClass}">P${record.spot}</td>
                     <td class="py-2 px-3 ${subTextClass}">${record.checkIn}</td>
                     <td class="py-2 px-3 ${subTextClass}">${record.checkOut || '-'}</td>
                     <td class="py-2 px-3 ${subTextClass}">${duration}</td>
@@ -582,9 +626,9 @@
             
             // Sort data: occupied spots (1-6) first, then completed by most recent
             const sortedData = [...parkingData].sort((a, b) => {
-                // First priority: occupied status for spots 1-6
-                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 6 && a.status === 'occupied';
-                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 6 && b.status === 'occupied';
+                // First priority: occupied status for spots 1-4
+                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 4 && a.status === 'occupied';
+                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 4 && b.status === 'occupied';
                 
                 if (aIsCurrentOccupied && !bIsCurrentOccupied) return -1;
                 if (!aIsCurrentOccupied && bIsCurrentOccupied) return 1;
@@ -596,8 +640,8 @@
             sortedData.slice(0, 10).forEach(record => {
                 const row = document.createElement('tr');
                 
-                // Add blue background for current parking spots (1-6) with occupied status
-                const isCurrentSpot = record.spot >= 1 && record.spot <= 6 && record.status === 'occupied';
+                // Add blue background for current parking spots (1-4) with occupied status
+                const isCurrentSpot = record.spot >= 1 && record.spot <= 4 && record.status === 'occupied';
                 const rowClass = isCurrentSpot 
                     ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
                     : 'border-b border-gray-100 hover:bg-gray-50';
@@ -613,7 +657,7 @@
                 const subTextClass = isCurrentSpot ? 'text-blue-700' : 'text-gray-600';
                 
                 row.innerHTML = `
-                    <td class="py-2 px-3 ${textClass}">Chỗ ${record.spot}</td>
+                    <td class="py-2 px-3 ${textClass}">P${record.spot}</td>
                     <td class="py-2 px-3 ${subTextClass}">${record.checkIn}</td>
                     <td class="py-2 px-3 ${subTextClass}">${record.checkOut || '-'}</td>
                     <td class="py-2 px-3 ${subTextClass}">${duration}</td>
@@ -632,6 +676,152 @@
             const hours = Math.floor(diff / (1000 * 60 * 60));
             const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             return `${hours}h ${minutes}m`;
+        }
+
+        // Simulate MQTT connection and license plate detection
+        function simulateMQTTConnection() {
+            // Simulate connection after 3 seconds
+            setTimeout(() => {
+                mqttConnected = true;
+                document.getElementById('mqttStatus').innerHTML = '🟢 Đã kết nối';
+                document.getElementById('mqttStatus').className = 'text-green-600 font-medium';
+                
+                // Start simulating license plate detection
+                simulateLicensePlateDetection();
+            }, 3000);
+        }
+
+        // Simulate license plate detection from MQTT
+        function simulateLicensePlateDetection() {
+            const samplePlates = ['29A-12345', '30B-67890', '51C-11111', '43D-22222', '77E-55555', '88F-66666'];
+            
+            setInterval(() => {
+                if (mqttConnected) {
+                    const randomPlate = samplePlates[Math.floor(Math.random() * samplePlates.length)];
+                    updateDetectedPlate(randomPlate);
+                }
+            }, 8000); // Update every 8 seconds
+        }
+
+        // Update detected license plate display
+        function updateDetectedPlate(plateNumber) {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString('vi-VN', {
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit'
+            });
+            
+            // Add new plate to the beginning of array
+            detectedPlates.unshift({
+                plate: plateNumber,
+                time: timestamp,
+                id: Date.now()
+            });
+            
+            // Keep only last 5 detections
+            if (detectedPlates.length > 5) {
+                detectedPlates = detectedPlates.slice(0, 5);
+            }
+            
+            updatePlateTable();
+        }
+
+        // Update plate detection table
+        function updatePlateTable() {
+            const tableBody = document.getElementById('plateTable');
+            tableBody.innerHTML = '';
+            
+            if (detectedPlates.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="2" class="py-4 px-3 text-center text-gray-500 text-sm">
+                        Chờ dữ liệu MQTT...
+                    </td>
+                `;
+                tableBody.appendChild(row);
+                return;
+            }
+            
+            detectedPlates.forEach((detection, index) => {
+                const row = document.createElement('tr');
+                const isLatest = index === 0;
+                const rowClass = isLatest 
+                    ? 'border-b border-gray-100 bg-blue-50 hover:bg-blue-100' 
+                    : 'border-b border-gray-100 hover:bg-gray-50';
+                
+                row.className = rowClass;
+                
+                const textClass = isLatest ? 'text-blue-800 font-medium' : 'text-gray-800';
+                const subTextClass = isLatest ? 'text-blue-700' : 'text-gray-600';
+                
+                row.innerHTML = `
+                    <td class="py-2 px-3 ${subTextClass}">${detection.time}</td>
+                    <td class="py-2 px-3 ${textClass}">${detection.plate}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Simulate barrier operations
+        function simulateBarrierOperations() {
+            setInterval(() => {
+                // Randomly toggle barriers
+                if (Math.random() < 0.3) { // 30% chance every interval
+                    toggleBarrier('in');
+                }
+                if (Math.random() < 0.25) { // 25% chance every interval
+                    toggleBarrier('out');
+                }
+            }, 12000); // Check every 12 seconds
+        }
+
+        // Toggle barrier status
+        function toggleBarrier(type) {
+            if (type === 'in') {
+                barrierInOpen = !barrierInOpen;
+                const container = document.getElementById('barrierInContainer');
+                const status = document.getElementById('barrierInStatus');
+                
+                if (barrierInOpen) {
+                    container.className = 'barrier-status bg-green-500 rounded-lg p-3 text-center text-white border-2 border-green-200';
+                    status.textContent = 'MỞ';
+                } else {
+                    container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                    status.textContent = 'ĐÓNG';
+                }
+                
+                // Auto close after 5 seconds if opened
+                if (barrierInOpen) {
+                    setTimeout(() => {
+                        barrierInOpen = false;
+                        container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                        status.textContent = 'ĐÓNG';
+                    }, 5000);
+                }
+            } else if (type === 'out') {
+                barrierOutOpen = !barrierOutOpen;
+                const container = document.getElementById('barrierOutContainer');
+                const status = document.getElementById('barrierOutStatus');
+                
+                if (barrierOutOpen) {
+                    container.className = 'barrier-status bg-green-500 rounded-lg p-3 text-center text-white border-2 border-green-200';
+                    status.textContent = 'MỞ';
+                } else {
+                    container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                    status.textContent = 'ĐÓNG';
+                }
+                
+                // Auto close after 5 seconds if opened
+                if (barrierOutOpen) {
+                    setTimeout(() => {
+                        barrierOutOpen = false;
+                        container.className = 'barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200';
+                        status.textContent = 'ĐÓNG';
+                    }, 5000);
+                }
+            }
         }
 
         // Initialize the application
@@ -656,10 +846,16 @@
             updateDateTime();
             updateChart(); // Initialize chart with date range
             
+            // Start MQTT simulation
+            simulateMQTTConnection();
+            
+            // Start barrier simulation
+            simulateBarrierOperations();
+            
             // Simulate real-time updates
             setInterval(updateTemperature, 5000); // Update temperature every 5 seconds
             setInterval(updateDateTime, 1000); // Update date/time every second
         });
     </script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'982b2e1e823036f1',t:'MTc1ODQ3NDY3MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98bc91cc61ef0988',t:'MTc1OTk5OTE4OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
