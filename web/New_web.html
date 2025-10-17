@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Quản Lý Bãi Đỗ Xe Thông Minh</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            box-sizing: border-box;
+        }
+        .parking-spot {
+            transition: all 0.3s ease;
+        }
+        .parking-spot.occupied {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
+            color: white;
+        }
+        .parking-spot.available {
+            background: linear-gradient(135deg, #10b981, #059669);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+            color: white;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .sidebar {
+            background: linear-gradient(180deg, #1e3a8a 0%, #1e40af 50%, #3b82f6 100%);
+        }
+        
+        /* Toast Notification Styles */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            padding: 16px 20px;
+            z-index: 1000;
+            transform: translateX(400px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            border-left: 4px solid #3b82f6;
+            min-width: 300px;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        
+        .toast.success {
+            border-left-color: #10b981;
+        }
+        
+        .toast.warning {
+            border-left-color: #f59e0b;
+        }
+        
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+        .nav-item {
+            transition: all 0.3s ease;
+        }
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateX(5px);
+        }
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-left: 4px solid #fbbf24;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            transition: transform 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        /* Toggle Switch Styles */
+        #manualToggle:checked + label {
+            background-color: #3b82f6;
+        }
+        
+        #manualToggle:checked + label span {
+            transform: translateX(1rem) translateY(0.25rem);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-full">
+    <!-- Sidebar -->
+    <div class="fixed left-0 top-0 h-full w-64 sidebar shadow-2xl z-50">
+        <div class="p-6">
+            <div class="flex items-center mb-8">
+                <div class="text-3xl mr-3">🚗</div>
+                <div>
+                    <h1 class="text-white font-bold text-lg">Smart Parking</h1>
+                    <p class="text-blue-200 text-sm">Quản lý thông minh</p>
+                </div>
+            </div>
+            
+            <nav class="space-y-2">
+                <div class="nav-item active rounded-lg p-3 cursor-pointer" onclick="showSection('parking')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">🅿️</span>
+                        <span class="font-medium">Bãi Đỗ Xe</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('monitoring')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📹</span>
+                        <span class="font-medium">Giám Sát</span>
+                    </div>
+                </div>
+                <div class="nav-item rounded-lg p-3 cursor-pointer" onclick="showSection('analytics')">
+                    <div class="flex items-center text-white">
+                        <span class="text-xl mr-3">📈</span>
+                        <span class="font-medium">Thống Kê</span>
+                    </div>
+                </div>
+            </nav>
+        </div>
+        
+        <!-- System Status -->
+        <div class="absolute bottom-6 left-6 right-6">
+            <div class="bg-white bg-opacity-10 rounded-lg p-4">
+                <div class="text-white text-sm font-medium mb-2">Trạng Thái Hệ Thống</div>
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">MQTT</span>
+                        <span class="text-green-400 text-xs font-bold" id="sidebarMqttStatus">🟢 Online</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">Camera</span>
+                        <span class="text-yellow-400 text-xs font-bold">🟡 Standby</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-blue-200 text-xs">Barrier</span>
+                        <span class="text-green-400 text-xs font-bold">🟢 Active</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="ml-64 min-h-full">
+        <!-- Top Header -->
+        <header class="bg-white shadow-sm border-b border-gray-200 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800" id="pageTitle">Dashboard</h2>
+                    <p class="text-gray-600 text-sm" id="pageSubtitle">Tổng quan hệ thống bãi đỗ xe</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-right">
+                        <div class="text-sm font-medium text-gray-800" id="headerTime">--:--:--</div>
+                        <div class="text-xs text-gray-500" id="headerDate">--</div>
+                    </div>
+                    <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+                        <span class="text-white font-bold">A</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+
+
+        <!-- Parking Section -->
+        <div id="parking-section" class="p-6">
+            <!-- Parking Layout -->
+            <div class="glass-card rounded-xl p-6 shadow-lg mb-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-xl font-bold text-gray-800">🅿️ Sơ Đồ Bãi Đỗ</h3>
+                    <div class="text-sm text-gray-600">
+                        <span class="font-medium">Trống: </span><span class="text-green-600 font-bold" id="parkingAvailable">2</span> | 
+                        <span class="font-medium">Đang đỗ: </span><span class="text-red-600 font-bold" id="parkingOccupied">2</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="1">
+                        <div class="font-bold text-lg">P1</div>
+                        <div class="text-sm opacity-80 mt-1">Trống</div>
+                    </div>
+                    <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="2">
+                        <div class="font-bold text-lg">P2</div>
+                        <div class="text-sm opacity-80 mt-1">Có xe</div>
+                    </div>
+                    <div class="parking-spot available rounded-lg p-4 text-center cursor-pointer border-2 border-green-200" data-spot="3">
+                        <div class="font-bold text-lg">P3</div>
+                        <div class="text-sm opacity-80 mt-1">Trống</div>
+                    </div>
+                    <div class="parking-spot occupied rounded-lg p-4 text-center cursor-pointer border-2 border-red-200" data-spot="4">
+                        <div class="font-bold text-lg">P4</div>
+                        <div class="text-sm opacity-80 mt-1">Có xe</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- History and Activity Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-10 gap-6">
+                <!-- History Section (7/10) -->
+                <div class="lg:col-span-7">
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                            <h3 class="text-xl font-bold text-gray-800">📋 Lịch Sử Đỗ Xe</h3>
+                            <div class="flex items-center gap-3">
+                                <input type="text" id="searchInput" placeholder="Tìm kiếm..." class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 w-40" oninput="searchData()">
+                                <select id="statusFilter" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="searchData()">
+                                    <option value="all">Tất cả</option>
+                                    <option value="occupied">Đang đỗ</option>
+                                    <option value="completed">Hoàn thành</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead>
+                                    <tr class="border-b border-gray-200 bg-gray-50">
+                                        <th class="pb-3 pt-3 px-4 font-bold text-gray-700">Chỗ đỗ</th>
+                                        <th class="pb-3 pt-3 px-4 font-bold text-gray-700">Giờ vào</th>
+                                        <th class="pb-3 pt-3 px-4 font-bold text-gray-700">Giờ ra</th>
+                                        <th class="pb-3 pt-3 px-4 font-bold text-gray-700">Thời gian</th>
+                                        <th class="pb-3 pt-3 px-4 font-bold text-gray-700">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTable" class="divide-y divide-gray-100">
+                                    <!-- Data will be populated by JavaScript -->
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <!-- Pagination -->
+                        <div class="flex flex-col sm:flex-row justify-between items-center mt-6 gap-4">
+                            <div class="text-sm text-gray-600">
+                                Hiển thị <span id="showingStart">1</span>-<span id="showingEnd">10</span> trong tổng số <span id="totalRecords">0</span> bản ghi
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button id="prevPage" onclick="changePage(-1)" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                    ← Trước
+                                </button>
+                                <div id="pageNumbers" class="flex space-x-1">
+                                    <!-- Page numbers will be generated by JavaScript -->
+                                </div>
+                                <button id="nextPage" onclick="changePage(1)" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                                    Sau →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Section (3/10) -->
+                <div class="lg:col-span-3">
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <h3 class="text-lg font-bold text-gray-800 mb-4">🔄 Hoạt Động Gần Đây</h3>
+                        <div class="space-y-2 max-h-80 overflow-y-auto" id="recentActivity">
+                            <div class="p-2 text-sm text-gray-700">
+                                <span class="font-medium text-blue-600">08:32:</span> Xe vào P2
+                            </div>
+                            <div class="p-2 text-sm text-gray-700">
+                                <span class="font-medium text-green-600">08:27:</span> Xe ra P1
+                            </div>
+                            <div class="p-2 text-sm text-gray-700">
+                                <span class="font-medium text-yellow-600">08:24:</span> Barrier mở
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Monitoring Section -->
+        <div id="monitoring-section" class="p-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Camera Feed -->
+                <div class="lg:col-span-2">
+                    <div class="glass-card rounded-xl p-6 shadow-lg">
+                        <div class="flex justify-between items-start mb-4">
+                            <h3 class="text-xl font-bold text-gray-800">📹 Camera ESP32-CAM</h3>
+                            <div class="bg-white rounded-lg p-3 shadow-sm border">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h4 class="text-sm font-bold text-gray-700">🔴 Cảm Biến Hồng Ngoại</h4>
+                                    <button onclick="toggleSensorInfo()" class="text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded transition-colors">
+                                        ℹ️ Chi tiết
+                                    </button>
+                                </div>
+                                
+                                <!-- Compact sensor display -->
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div class="bg-gray-50 rounded p-2">
+                                        <div class="font-bold text-gray-800 mb-1">VÀO</div>
+                                        <div class="flex justify-between">
+                                            <span>Trước: <span class="text-green-600 font-bold" id="sensorIn1">🟢</span></span>
+                                            <span>Sau: <span class="text-gray-400 font-bold" id="sensorIn2">⚪</span></span>
+                                        </div>
+                                    </div>
+                                    <div class="bg-gray-50 rounded p-2">
+                                        <div class="font-bold text-gray-800 mb-1">RA</div>
+                                        <div class="text-center">
+                                            <span>Sau: <span class="text-red-600 font-bold" id="sensorOut2">🔴</span></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Hidden detailed info -->
+                                <div id="sensorDetailInfo" class="hidden mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                    <div class="text-xs space-y-2">
+                                        <div class="font-medium text-blue-800">Chức năng cảm biến:</div>
+                                        <div class="space-y-1 text-blue-700">
+                                            <div>• <strong>VÀO - Trước:</strong> Phát hiện xe → Quét RFID</div>
+                                            <div>• <strong>VÀO - Sau:</strong> Xe qua → Đóng barrier</div>
+                                            <div>• <strong>RA - Sau:</strong> Xe qua → Đóng barrier</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-900 rounded-lg aspect-video flex flex-col items-center justify-center text-gray-400">
+                            <div class="text-6xl mb-4">📷</div>
+                            <div class="text-lg font-medium mb-2">ESP32-CAM Feed</div>
+                            <div class="text-sm text-center px-4">
+                                Camera sẽ hiển thị video trực tiếp khi được kết nối
+                            </div>
+                            <div class="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
+                                🔗 Đang kết nối...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="space-y-6">
+                    <!-- Barrier Control -->
+                    <div class="glass-card rounded-xl p-4 shadow-lg">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-bold text-gray-800">🚧 Điều Khiển Barrier</h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs text-gray-600">Thủ công</span>
+                                <div class="relative inline-block w-10 h-6">
+                                    <input type="checkbox" id="manualToggle" class="sr-only" onchange="toggleManualMode()">
+                                    <label for="manualToggle" class="block w-10 h-6 bg-gray-300 rounded-full cursor-pointer transition-colors duration-200 ease-in-out">
+                                        <span class="block w-4 h-4 bg-white rounded-full shadow transform transition-transform duration-200 ease-in-out translate-x-1 translate-y-1"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3 mb-3">
+                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200 cursor-pointer" id="barrierInContainer" onclick="manualBarrierControl('in')">
+                                <div class="text-xs font-bold mb-1 opacity-90">VÀO</div>
+                                <div class="text-lg font-bold" id="barrierInStatus">ĐÓNG</div>
+                            </div>
+                            <div class="barrier-status bg-red-500 rounded-lg p-3 text-center text-white border-2 border-red-200 cursor-pointer" id="barrierOutContainer" onclick="manualBarrierControl('out')">
+                                <div class="text-xs font-bold mb-1 opacity-90">RA</div>
+                                <div class="text-lg font-bold" id="barrierOutStatus">ĐÓNG</div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 text-sm">Barrier System:</span>
+                                <span class="text-green-600 font-bold text-sm" id="barrierConnection">🟢 Hoạt động</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- License Plate Detection -->
+                    <div class="glass-card rounded-xl p-4 shadow-lg">
+                        <div class="flex justify-between items-center mb-3">
+                            <h4 class="font-bold text-gray-800 text-sm">🔍 Biển Số Phát Hiện</h4>
+                            <span class="text-green-600 font-medium text-xs" id="plateDetectionStatus">🟢 Hoạt động</span>
+                        </div>
+                        <div class="space-y-2 max-h-48 overflow-y-auto" id="plateDetectionList">
+                            <div class="text-center text-gray-500 py-3">
+                                <div class="text-xl mb-1">⏳</div>
+                                <p class="text-xs">Chờ dữ liệu...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div id="analytics-section" class="p-6 hidden">
+            <div class="glass-card rounded-xl p-6 shadow-lg mb-6">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
+                    <h3 class="text-xl font-bold text-gray-800">📈 Biểu Đồ Thống Kê</h3>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <select id="chartFilter" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500" onchange="updateChart()">
+                            <option value="day">Theo ngày</option>
+                            <option value="month">Theo tháng</option>
+                            <option value="custom">Tuỳ chọn</option>
+                        </select>
+                        <input type="date" id="singleDate" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <select id="monthSelect" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden">
+                            <option value="1">Tháng 1</option>
+                            <option value="2">Tháng 2</option>
+                            <option value="3">Tháng 3</option>
+                            <option value="4">Tháng 4</option>
+                            <option value="5">Tháng 5</option>
+                            <option value="6">Tháng 6</option>
+                            <option value="7">Tháng 7</option>
+                            <option value="8">Tháng 8</option>
+                            <option value="9">Tháng 9</option>
+                            <option value="10">Tháng 10</option>
+                            <option value="11">Tháng 11</option>
+                            <option value="12">Tháng 12</option>
+                        </select>
+                        <input type="date" id="startDate" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden">
+                        <input type="date" id="endDate" class="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 hidden">
+                        <button onclick="filterChartData()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                            🔍 Lọc
+                        </button>
+                    </div>
+                </div>
+                <canvas id="usageChart" width="400" height="200"></canvas>
+                <div id="chartDateRange" class="mt-4 text-center text-gray-600 font-medium"></div>
+            </div>
+        </div>
+
+
+    </div>
+
+    <script>
+        // Sample data for parking management
+        let parkingData = [
+            {id: 1, licensePlate: '29A-12345', spot: 2, checkIn: '08:30', checkOut: null, fee: 45000, status: 'occupied'},
+            {id: 2, licensePlate: '30B-67890', spot: 4, checkIn: '09:15', checkOut: null, fee: 30000, status: 'occupied'},
+            {id: 3, licensePlate: '51C-11111', spot: 1, checkIn: '07:00', checkOut: '09:30', fee: 50000, status: 'completed'},
+            {id: 4, licensePlate: '43D-22222', spot: 3, checkIn: '06:45', checkOut: '08:15', fee: 30000, status: 'completed'},
+            {id: 5, licensePlate: '29E-33333', spot: 2, checkIn: '05:30', checkOut: '07:45', fee: 45000, status: 'completed'},
+            {id: 6, licensePlate: '51F-44444', spot: 1, checkIn: '04:15', checkOut: '06:30', fee: 35000, status: 'completed'},
+            {id: 7, licensePlate: '77G-55555', spot: 4, checkIn: '03:00', checkOut: '05:45', fee: 45000, status: 'completed'},
+            {id: 8, licensePlate: '88H-12345', spot: 3, checkIn: '02:30', checkOut: '04:15', fee: 35000, status: 'completed'},
+            {id: 9, licensePlate: '92K-67890', spot: 1, checkIn: '01:45', checkOut: '03:30', fee: 40000, status: 'completed'},
+            {id: 10, licensePlate: '15L-11111', spot: 2, checkIn: '00:30', checkOut: '02:45', fee: 45000, status: 'completed'},
+            {id: 11, licensePlate: '67M-22222', spot: 4, checkIn: '23:15', checkOut: '01:30', fee: 50000, status: 'completed'},
+            {id: 12, licensePlate: '34N-33333', spot: 3, checkIn: '22:00', checkOut: '00:15', fee: 40000, status: 'completed'},
+            {id: 13, licensePlate: '78P-44444', spot: 1, checkIn: '21:30', checkOut: '23:45', fee: 45000, status: 'completed'},
+            {id: 14, licensePlate: '45Q-55555', spot: 2, checkIn: '20:15', checkOut: '22:30', fee: 50000, status: 'completed'},
+            {id: 15, licensePlate: '89R-66666', spot: 4, checkIn: '19:00', checkOut: '21:15', fee: 45000, status: 'completed'},
+            {id: 16, licensePlate: '23S-77777', spot: 3, checkIn: '18:30', checkOut: '20:45', fee: 40000, status: 'completed'},
+            {id: 17, licensePlate: '56T-88888', spot: 1, checkIn: '17:15', checkOut: '19:30', fee: 50000, status: 'completed'},
+            {id: 18, licensePlate: '12U-99999', spot: 2, checkIn: '16:00', checkOut: '18:15', fee: 45000, status: 'completed'},
+            {id: 19, licensePlate: '90V-10101', spot: 4, checkIn: '15:30', checkOut: '17:45', fee: 40000, status: 'completed'},
+            {id: 20, licensePlate: '47W-20202', spot: 3, checkIn: '14:15', checkOut: '16:30', fee: 45000, status: 'completed'},
+            {id: 21, licensePlate: '83X-30303', spot: 1, checkIn: '13:00', checkOut: '15:15', fee: 50000, status: 'completed'},
+            {id: 22, licensePlate: '29Y-40404', spot: 2, checkIn: '12:30', checkOut: '14:45', fee: 45000, status: 'completed'},
+            {id: 23, licensePlate: '65Z-50505', spot: 4, checkIn: '11:15', checkOut: '13:30', fee: 40000, status: 'completed'},
+            {id: 24, licensePlate: '18A-60606', spot: 3, checkIn: '10:00', checkOut: '12:15', fee: 45000, status: 'completed'},
+            {id: 25, licensePlate: '72B-70707', spot: 1, checkIn: '09:30', checkOut: '11:45', fee: 50000, status: 'completed'}
+        ];
+
+        // Navigation and UI variables
+        let currentSection = 'parking';
+        let mqttConnected = false;
+        let detectedPlates = [];
+        let barrierInOpen = false;
+        let barrierOutOpen = false;
+        let manualMode = false;
+        let recentActivities = [
+            { time: '08:32', content: 'P2 có xe', type: 'blue' },
+            { time: '08:27', content: 'P1 trống', type: 'green' },
+            { time: '08:24', content: 'Barrier VÀO: MỞ', type: 'yellow' }
+        ];
+
+        // Pagination variables
+        let currentPage = 1;
+        let recordsPerPage = 10;
+        let filteredData = [];
+
+        // Chart data for different time periods
+        const chartData = {
+            day: {
+                labels: ['0h', '1h', '2h', '3h', '4h', '5h', '6h', '7h', '8h', '9h', '10h', '11h', '12h', '13h', '14h', '15h', '16h', '17h', '18h', '19h', '20h', '21h', '22h', '23h'],
+                data: [5, 3, 2, 8, 15, 25, 45, 75, 85, 90, 88, 92, 95, 90, 85, 88, 92, 95, 88, 75, 65, 45, 25, 15],
+                label: 'Tỷ lệ sử dụng (%)',
+                dateRange: '14/12/2024'
+            },
+            month: {
+                labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31'],
+                data: [65, 78, 72, 85, 92, 88, 70, 75, 82, 90, 85, 78, 88, 92, 85, 80, 75, 88, 90, 85, 78, 82, 88, 85, 90, 88, 85, 82, 78, 85, 88],
+                label: 'Tỷ lệ sử dụng (%)',
+                dateRange: 'Tháng 12/2024'
+            },
+            custom: {
+                labels: ['14/12', '15/12', '16/12', '17/12', '18/12', '19/12', '20/12'],
+                data: [65, 78, 72, 85, 92, 88, 70],
+                label: 'Tỷ lệ sử dụng (%)',
+                dateRange: '14/12/2024 - 20/12/2024'
+            }
+        };
+
+        let usageChart;
+
+        // Navigation function
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('[id$="-section"]').forEach(section => {
+                section.classList.add('hidden');
+            });
+            
+            // Show selected section
+            document.getElementById(sectionName + '-section').classList.remove('hidden');
+            
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.nav-item').classList.add('active');
+            
+            // Update page title
+            const titles = {
+                'parking': { title: 'Bãi Đỗ Xe', subtitle: 'Quản lý và lịch sử đỗ xe' },
+                'monitoring': { title: 'Giám Sát', subtitle: 'Camera, barrier và hoạt động' },
+                'analytics': { title: 'Thống Kê', subtitle: 'Phân tích dữ liệu sử dụng' }
+            };
+            
+            document.getElementById('pageTitle').textContent = titles[sectionName].title;
+            document.getElementById('pageSubtitle').textContent = titles[sectionName].subtitle;
+            currentSection = sectionName;
+        }
+
+        // Initialize charts
+        function initCharts() {
+            const usageCtx = document.getElementById('usageChart').getContext('2d');
+            usageChart = new Chart(usageCtx, {
+                type: 'line',
+                data: {
+                    labels: chartData.day.labels,
+                    datasets: [{
+                        label: chartData.day.label,
+                        data: chartData.day.data,
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#1d4ed8',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 6,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#374151',
+                                font: { size: 14, weight: 'bold' }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                color: '#374151',
+                                callback: function(value) { return value + '%'; }
+                            }
+                        },
+                        x: { ticks: { color: '#374151' } }
+                    }
+                }
+            });
+        }
+
+        // Update chart based on filter selection
+        function updateChart() {
+            const filterValue = document.getElementById('chartFilter').value;
+            const singleDate = document.getElementById('singleDate');
+            const monthSelect = document.getElementById('monthSelect');
+            const startDate = document.getElementById('startDate');
+            const endDate = document.getElementById('endDate');
+            
+            // Hide all inputs first
+            singleDate.classList.add('hidden');
+            monthSelect.classList.add('hidden');
+            startDate.classList.add('hidden');
+            endDate.classList.add('hidden');
+            
+            // Show appropriate inputs based on filter
+            if (filterValue === 'day') {
+                singleDate.classList.remove('hidden');
+            } else if (filterValue === 'month') {
+                monthSelect.classList.remove('hidden');
+            } else if (filterValue === 'custom') {
+                startDate.classList.remove('hidden');
+                endDate.classList.remove('hidden');
+            }
+            
+            const selectedData = chartData[filterValue];
+            usageChart.data.labels = selectedData.labels;
+            usageChart.data.datasets[0].data = selectedData.data;
+            usageChart.data.datasets[0].label = selectedData.label;
+            usageChart.update();
+            
+            document.getElementById('chartDateRange').textContent = selectedData.dateRange;
+        }
+
+        // Filter chart data by date range
+        function filterChartData() {
+            const filterValue = document.getElementById('chartFilter').value;
+            const singleDate = document.getElementById('singleDate').value;
+            const monthSelect = document.getElementById('monthSelect').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (filterValue === 'day' && singleDate) {
+                const date = new Date(singleDate);
+                const dateFormatted = date.toLocaleDateString('vi-VN');
+                document.getElementById('chartDateRange').textContent = dateFormatted;
+                
+                // Generate random hourly data for the selected day
+                const hourlyData = chartData.day.data.map(val => Math.floor(val * (0.7 + Math.random() * 0.6)));
+                usageChart.data.labels = chartData.day.labels;
+                usageChart.data.datasets[0].data = hourlyData;
+                usageChart.update();
+            } else if (filterValue === 'month' && monthSelect) {
+                const monthNames = ['', 'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+                document.getElementById('chartDateRange').textContent = `${monthNames[monthSelect]}/2024`;
+                
+                // Generate random daily data for the selected month
+                const dailyData = chartData.month.data.map(val => Math.floor(val * (0.7 + Math.random() * 0.6)));
+                usageChart.data.labels = chartData.month.labels;
+                usageChart.data.datasets[0].data = dailyData;
+                usageChart.update();
+            } else if (filterValue === 'custom' && startDate && endDate) {
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const startFormatted = start.toLocaleDateString('vi-VN');
+                const endFormatted = end.toLocaleDateString('vi-VN');
+                
+                document.getElementById('chartDateRange').textContent = `${startFormatted} - ${endFormatted}`;
+                
+                const selectedData = chartData.custom;
+                usageChart.data.labels = selectedData.labels;
+                usageChart.data.datasets[0].data = selectedData.data.map(val => Math.floor(val * (0.7 + Math.random() * 0.6)));
+                usageChart.update();
+            } else {
+                updateChart();
+            }
+        }
+
+        // Search function for data table
+        function searchData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            filteredData = [...parkingData];
+            
+            if (searchTerm) {
+                filteredData = filteredData.filter(record => {
+                    // Check if search term matches parking spot format (P1, P2, P3, P4)
+                    const spotSearch = searchTerm.match(/^p(\d+)$/);
+                    if (spotSearch) {
+                        return record.spot.toString() === spotSearch[1];
+                    }
+                    
+                    // Regular search in all fields
+                    return record.spot.toString().includes(searchTerm) ||
+                           record.licensePlate.toLowerCase().includes(searchTerm) ||
+                           record.checkIn.includes(searchTerm) ||
+                           (record.checkOut && record.checkOut.includes(searchTerm));
+                });
+            }
+            
+            if (statusFilter !== 'all') {
+                filteredData = filteredData.filter(record => record.status === statusFilter);
+            }
+            
+            // Reset to first page when searching
+            currentPage = 1;
+            updateDataTableWithPagination();
+        }
+
+        // Update temperature
+        function updateTemperature() {
+            const temp = Math.floor(Math.random() * 10) + 25;
+            const tempStr = temp + '°C';
+            document.getElementById('monitoringTemp').textContent = tempStr;
+        }
+
+        // Update date and time
+        function updateDateTime() {
+            const now = new Date();
+            const timeOptions = { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+            const dateOptions = { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' };
+            
+            const timeStr = now.toLocaleTimeString('vi-VN', timeOptions);
+            const dateStr = now.toLocaleDateString('vi-VN', dateOptions);
+            
+            document.getElementById('headerTime').textContent = timeStr;
+            document.getElementById('headerDate').textContent = dateStr;
+        }
+
+        // Update parking status
+        function updateParkingStatus() {
+            const spots = document.querySelectorAll('.parking-spot');
+            let availableCount = 0;
+            let occupiedCount = 0;
+            
+            spots.forEach(spot => {
+                if (spot.classList.contains('available')) {
+                    availableCount++;
+                } else {
+                    occupiedCount++;
+                }
+            });
+            
+            // Update all status displays
+            document.getElementById('parkingAvailable').textContent = availableCount;
+            document.getElementById('parkingOccupied').textContent = occupiedCount;
+        }
+
+        // Toggle parking spot status
+        function toggleParkingSpot(spotElement) {
+            const spotNumber = spotElement.dataset.spot;
+            const statusText = spotElement.querySelector('.text-sm');
+            
+            if (spotElement.classList.contains('available')) {
+                spotElement.classList.remove('available');
+                spotElement.classList.add('occupied');
+                spotElement.classList.remove('border-green-200');
+                spotElement.classList.add('border-red-200');
+                statusText.textContent = 'Có xe';
+                
+                const licensePlate = generateLicensePlate();
+                const newRecord = {
+                    id: Date.now(),
+                    licensePlate: licensePlate,
+                    spot: parseInt(spotNumber),
+                    checkIn: new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'}),
+                    checkOut: null,
+                    fee: 0,
+                    status: 'occupied'
+                };
+                parkingData.unshift(newRecord);
+                
+                // Show toast notification and add activity
+                showToast(`🚗 Xe vào P${spotNumber}`, `Biển số: ${licensePlate}`, 'success');
+                addRecentActivity(`P${spotNumber} có xe`, 'blue');
+                playNotificationSound();
+            } else {
+                spotElement.classList.remove('occupied');
+                spotElement.classList.add('available');
+                spotElement.classList.remove('border-red-200');
+                spotElement.classList.add('border-green-200');
+                statusText.textContent = 'Trống';
+                
+                const record = parkingData.find(r => r.spot === parseInt(spotNumber) && r.status === 'occupied');
+                if (record) {
+                    record.checkOut = new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
+                    record.status = 'completed';
+                    record.fee = Math.floor(Math.random() * 50000) + 20000;
+                    
+                    // Show toast notification and add activity
+                    showToast(`🚙 Xe rời P${spotNumber}`, `Biển số: ${record.licensePlate}`, 'warning');
+                    addRecentActivity(`P${spotNumber} trống`, 'green');
+                    playNotificationSound();
+                }
+            }
+            
+            updateParkingStatus();
+            updateDataTable();
+        }
+
+        // Generate random license plate
+        function generateLicensePlate() {
+            const prefixes = ['29A', '30B', '51C', '43D', '77E', '88F'];
+            const numbers = Math.floor(Math.random() * 90000) + 10000;
+            return prefixes[Math.floor(Math.random() * prefixes.length)] + '-' + numbers;
+        }
+
+        // Update data table with pagination
+        function updateDataTableWithPagination() {
+            const tableBody = document.getElementById('dataTable');
+            tableBody.innerHTML = '';
+            
+            if (filteredData.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="py-8 px-4 text-center text-gray-500">
+                        <div class="text-4xl mb-2">🔍</div>
+                        <div class="font-medium">Không tìm thấy dữ liệu phù hợp</div>
+                        <div class="text-sm">Thử thay đổi điều kiện lọc</div>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+                updatePaginationInfo(0);
+                return;
+            }
+            
+            // Sort data: occupied spots first, then by ID descending
+            const sortedData = [...filteredData].sort((a, b) => {
+                const aIsCurrentOccupied = a.spot >= 1 && a.spot <= 4 && a.status === 'occupied';
+                const bIsCurrentOccupied = b.spot >= 1 && b.spot <= 4 && b.status === 'occupied';
+                
+                if (aIsCurrentOccupied && !bIsCurrentOccupied) return -1;
+                if (!aIsCurrentOccupied && bIsCurrentOccupied) return 1;
+                
+                return b.id - a.id;
+            });
+            
+            // Calculate pagination
+            const totalRecords = sortedData.length;
+            const totalPages = Math.ceil(totalRecords / recordsPerPage);
+            const startIndex = (currentPage - 1) * recordsPerPage;
+            const endIndex = Math.min(startIndex + recordsPerPage, totalRecords);
+            const currentPageData = sortedData.slice(startIndex, endIndex);
+            
+            // Render table rows
+            currentPageData.forEach(record => {
+                const row = document.createElement('tr');
+                const isCurrentSpot = record.spot >= 1 && record.spot <= 4 && record.status === 'occupied';
+                const rowClass = isCurrentSpot ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50';
+                
+                row.className = rowClass;
+                
+                const duration = record.checkOut ? calculateDuration(record.checkIn, record.checkOut) : calculateDuration(record.checkIn, new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'}));
+                const statusClass = record.status === 'occupied' ? 'bg-red-500' : 'bg-green-500';
+                const statusText = record.status === 'occupied' ? 'Đang đỗ' : 'Hoàn thành';
+                
+                const textClass = isCurrentSpot ? 'text-blue-800 font-medium' : 'text-gray-800';
+                const subTextClass = isCurrentSpot ? 'text-blue-700' : 'text-gray-600';
+                
+                row.innerHTML = `
+                    <td class="py-3 px-4 ${textClass}">P${record.spot}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${record.checkIn}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${record.checkOut || '-'}</td>
+                    <td class="py-3 px-4 ${subTextClass}">${duration}</td>
+                    <td class="py-3 px-4"><span class="${statusClass} text-white px-3 py-1 rounded-full text-xs font-semibold">${statusText}</span></td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+            
+            updatePaginationInfo(totalRecords, startIndex + 1, endIndex, totalPages);
+        }
+
+        // Update pagination information and controls
+        function updatePaginationInfo(totalRecords, showingStart = 0, showingEnd = 0, totalPages = 0) {
+            document.getElementById('totalRecords').textContent = totalRecords;
+            document.getElementById('showingStart').textContent = showingStart;
+            document.getElementById('showingEnd').textContent = showingEnd;
+            
+            // Update pagination buttons
+            const prevButton = document.getElementById('prevPage');
+            const nextButton = document.getElementById('nextPage');
+            
+            prevButton.disabled = currentPage <= 1;
+            nextButton.disabled = currentPage >= totalPages;
+            
+            // Generate page numbers
+            generatePageNumbers(totalPages);
+        }
+
+        // Generate page number buttons
+        function generatePageNumbers(totalPages) {
+            const pageNumbersContainer = document.getElementById('pageNumbers');
+            pageNumbersContainer.innerHTML = '';
+            
+            if (totalPages <= 1) return;
+            
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            // Adjust start page if we're near the end
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                const pageButton = document.createElement('button');
+                pageButton.textContent = i;
+                pageButton.className = i === currentPage 
+                    ? 'px-3 py-2 bg-blue-600 text-white rounded-lg font-medium'
+                    : 'px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors';
+                pageButton.onclick = () => goToPage(i);
+                pageNumbersContainer.appendChild(pageButton);
+            }
+        }
+
+        // Change page function
+        function changePage(direction) {
+            const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+            const newPage = currentPage + direction;
+            
+            if (newPage >= 1 && newPage <= totalPages) {
+                currentPage = newPage;
+                updateDataTableWithPagination();
+            }
+        }
+
+        // Go to specific page
+        function goToPage(page) {
+            currentPage = page;
+            updateDataTableWithPagination();
+        }
+
+        // Update data table (main function)
+        function updateDataTable() {
+            filteredData = [...parkingData];
+            currentPage = 1;
+            updateDataTableWithPagination();
+        }
+
+        // Calculate duration between two times
+        function calculateDuration(startTime, endTime) {
+            const start = new Date(`2024-01-01 ${startTime}`);
+            const end = new Date(`2024-01-01 ${endTime}`);
+            const diff = Math.abs(end - start);
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            return `${hours}h ${minutes}m`;
+        }
+
+        // Simulate MQTT connection
+        function simulateMQTTConnection() {
+            setTimeout(() => {
+                mqttConnected = true;
+                document.getElementById('sidebarMqttStatus').innerHTML = '🟢 Online';
+                document.getElementById('plateDetectionStatus').innerHTML = '🟢 Hoạt động';
+                simulateLicensePlateDetection();
+            }, 3000);
+        }
+
+        // Simulate license plate detection
+        function simulateLicensePlateDetection() {
+            const samplePlates = ['29A-12345', '30B-67890', '51C-11111', '43D-22222', '77E-55555', '88F-66666'];
+            
+            setInterval(() => {
+                if (mqttConnected) {
+                    const randomPlate = samplePlates[Math.floor(Math.random() * samplePlates.length)];
+                    updateDetectedPlate(randomPlate);
+                }
+            }, 8000);
+        }
+
+        // Update detected license plate display
+        function updateDetectedPlate(plateNumber) {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString('vi-VN', {
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            
+            detectedPlates.unshift({
+                plate: plateNumber,
+                time: timestamp,
+                id: Date.now()
+            });
+            
+            if (detectedPlates.length > 5) {
+                detectedPlates = detectedPlates.slice(0, 5);
+            }
+            
+            updatePlateDetectionList();
+        }
+
+        // Update plate detection list
+        function updatePlateDetectionList() {
+            const listContainer = document.getElementById('plateDetectionList');
+            listContainer.innerHTML = '';
+            
+            if (detectedPlates.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center text-gray-500 py-4">
+                        <div class="text-2xl mb-2">⏳</div>
+                        <p class="text-sm">Chờ dữ liệu...</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            detectedPlates.forEach((detection, index) => {
+                const isLatest = index === 0;
+                const bgClass = isLatest ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200';
+                const textClass = isLatest ? 'text-blue-800 font-medium' : 'text-gray-800';
+                
+                const item = document.createElement('div');
+                item.className = `flex justify-between items-center p-3 rounded-lg border ${bgClass}`;
+                item.innerHTML = `
+                    <span class="${textClass}">${detection.plate}</span>
+                    <span class="text-xs text-gray-500">${detection.time}</span>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        // Simulate barrier operations
+        function simulateBarrierOperations() {
+            setInterval(() => {
+                if (Math.random() < 0.3) toggleBarrier('in');
+                if (Math.random() < 0.25) toggleBarrier('out');
+            }, 12000);
+        }
+
+        // Toggle barrier status
+        function toggleBarrier(type) {
+            if (type === 'in') {
+                barrierInOpen = !barrierInOpen;
+                const container = document.getElementById('barrierInContainer');
+                const status = document.getElementById('barrierInStatus');
+                
+                if (barrierInOpen) {
+                    container.className = 'barrier-status bg-green-500 rounded-xl p-4 text-center text-white border-2 border-green-200';
+                    status.textContent = 'MỞ';
+                    addRecentActivity('Barrier VÀO: MỞ', 'yellow');
+                } else {
+                    container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
+                    status.textContent = 'ĐÓNG';
+                    addRecentActivity('Barrier VÀO: ĐÓNG', 'yellow');
+                }
+                
+                if (barrierInOpen) {
+                    setTimeout(() => {
+                        barrierInOpen = false;
+                        container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
+                        status.textContent = 'ĐÓNG';
+                        addRecentActivity('Barrier VÀO: ĐÓNG', 'yellow');
+                    }, 5000);
+                }
+            } else if (type === 'out') {
+                barrierOutOpen = !barrierOutOpen;
+                const container = document.getElementById('barrierOutContainer');
+                const status = document.getElementById('barrierOutStatus');
+                
+                if (barrierOutOpen) {
+                    container.className = 'barrier-status bg-green-500 rounded-xl p-4 text-center text-white border-2 border-green-200';
+                    status.textContent = 'MỞ';
+                    addRecentActivity('Barrier RA: MỞ', 'yellow');
+                } else {
+                    container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
+                    status.textContent = 'ĐÓNG';
+                    addRecentActivity('Barrier RA: ĐÓNG', 'yellow');
+                }
+                
+                if (barrierOutOpen) {
+                    setTimeout(() => {
+                        barrierOutOpen = false;
+                        container.className = 'barrier-status bg-red-500 rounded-xl p-4 text-center text-white border-2 border-red-200';
+                        status.textContent = 'ĐÓNG';
+                        addRecentActivity('Barrier RA: ĐÓNG', 'yellow');
+                    }, 5000);
+                }
+            }
+        }
+
+        // Toggle manual mode
+        function toggleManualMode() {
+            manualMode = document.getElementById('manualToggle').checked;
+        }
+
+        // Manual barrier control
+        function manualBarrierControl(type) {
+            if (!manualMode) return;
+            
+            if (type === 'in') {
+                toggleBarrier('in');
+            } else if (type === 'out') {
+                toggleBarrier('out');
+            }
+        }
+
+        // Add recent activity
+        function addRecentActivity(content, type) {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('vi-VN', {hour: '2-digit', minute: '2-digit'});
+            
+            recentActivities.unshift({
+                time: timeStr,
+                content: content,
+                type: type
+            });
+            
+            if (recentActivities.length > 8) {
+                recentActivities = recentActivities.slice(0, 8);
+            }
+            
+            updateRecentActivities();
+        }
+
+        // Show toast notification
+        function showToast(title, message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            toast.innerHTML = `
+                <div class="flex items-start">
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800 mb-1">${title}</div>
+                        <div class="text-sm text-gray-600">${message}</div>
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" class="ml-3 text-gray-400 hover:text-gray-600">
+                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            // Show toast
+            setTimeout(() => {
+                toast.classList.add('show');
+            }, 100);
+            
+            // Auto hide after 4 seconds
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.remove();
+                    }
+                }, 300);
+            }, 4000);
+        }
+
+        // Play notification sound
+        function playNotificationSound() {
+            // Create audio context for notification sound
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create a simple notification beep
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (error) {
+                console.log('Audio not supported');
+            }
+        }
+
+        // Update recent activities display
+        function updateRecentActivities() {
+            const container = document.getElementById('recentActivity');
+            container.innerHTML = '';
+            
+            recentActivities.forEach(activity => {
+                const colorClass = activity.type === 'blue' ? 'text-blue-600' : 
+                                 activity.type === 'green' ? 'text-green-600' : 'text-yellow-600';
+                
+                const item = document.createElement('div');
+                item.className = 'p-2 text-sm text-gray-700';
+                item.innerHTML = `<span class="font-medium ${colorClass}">${activity.time}:</span> ${activity.content}`;
+                container.appendChild(item);
+            });
+        }
+
+        // Simulate sensor status changes
+        function simulateSensorChanges() {
+            const sensors = ['sensorIn1', 'sensorIn2', 'sensorOut2']; // Removed sensorOut1 as it doesn't exist
+            const statuses = ['🟢', '⚪', '🔴'];
+            const colors = ['text-green-600', 'text-gray-400', 'text-red-600'];
+            
+            setInterval(() => {
+                if (Math.random() < 0.2) {
+                    const randomSensor = sensors[Math.floor(Math.random() * sensors.length)];
+                    const randomStatus = Math.floor(Math.random() * statuses.length);
+                    
+                    const element = document.getElementById(randomSensor);
+                    element.textContent = statuses[randomStatus];
+                    element.className = `font-bold ${colors[randomStatus]}`;
+                }
+            }, 3000);
+        }
+
+        // Toggle sensor detail information
+        function toggleSensorInfo() {
+            const detailInfo = document.getElementById('sensorDetailInfo');
+            const button = event.target;
+            
+            if (detailInfo.classList.contains('hidden')) {
+                detailInfo.classList.remove('hidden');
+                button.textContent = '❌ Đóng';
+                button.classList.remove('bg-blue-100', 'hover:bg-blue-200', 'text-blue-700');
+                button.classList.add('bg-red-100', 'hover:bg-red-200', 'text-red-700');
+            } else {
+                detailInfo.classList.add('hidden');
+                button.textContent = 'ℹ️ Chi tiết';
+                button.classList.remove('bg-red-100', 'hover:bg-red-200', 'text-red-700');
+                button.classList.add('bg-blue-100', 'hover:bg-blue-200', 'text-blue-700');
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set default dates
+            const today = new Date();
+            const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            document.getElementById('singleDate').value = today.toISOString().split('T')[0];
+            document.getElementById('monthSelect').value = (today.getMonth() + 1).toString();
+            document.getElementById('startDate').value = weekAgo.toISOString().split('T')[0];
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            
+            // Add click events to parking spots
+            document.querySelectorAll('.parking-spot').forEach(spot => {
+                spot.addEventListener('click', () => toggleParkingSpot(spot));
+            });
+            
+            // Initialize charts
+            initCharts();
+            
+            // Update initial status
+            updateParkingStatus();
+            updateDataTable();
+            updateDateTime();
+            updateChart();
+            
+            // Initialize recent activities
+            updateRecentActivities();
+            
+            // Start simulations
+            simulateMQTTConnection();
+            simulateBarrierOperations();
+            simulateSensorChanges();
+            
+            // Real-time updates
+            setInterval(updateTemperature, 5000);
+            setInterval(updateDateTime, 1000);
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'98ca482934729faa',t:'MTc2MDE0Mjk3Mi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
