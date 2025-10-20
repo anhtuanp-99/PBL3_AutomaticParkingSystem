@@ -6,222 +6,168 @@
 #include <MFRC522.h>
 #include <ESP32Servo.h>
 
-// ==========================
-// WiFi & MQTT
-// ==========================
+// ====== WiFi & MQTT ======
 const char* ssid = "Kaka";
 const char* password = "12345678";
 const char* mqtt_server = "b5730ad18edf4f60acae31bb8160b04d.s1.eu.hivemq.cloud";
 const int mqtt_port = 8883;
 const char* mqtt_username = "my_cloud";
 const char* mqtt_password = "Anhtuan123";
-
 WiFiClientSecure espClient;
 PubSubClient client(espClient);
 
-// ==========================
-// PIN mapping (xác nhận bởi bạn)
-// ==========================
-const int SERVO_PIN = 21;
-const int BUTTON_PIN = 4;
-const int IR_PIN_MAIN = 34;               // cảm biến sau barrier (CO XE = LOW)
-const int IR_PARK[4] = {13, 33, 14, 32};  // P1..P4
+// ====== PIN mapping ======
+const int RFID_SCK = 18, RFID_MISO = 19, RFID_MOSI = 23, RFID_SS = 5, RFID_RST = 2;
 
-// RFID (RC522)
-const uint8_t PIN_SCK  = 18;
-const uint8_t PIN_MISO = 19;
-const uint8_t PIN_MOSI = 23;
-const uint8_t PIN_SS   = 5;
-const uint8_t PIN_RST  = 2;
+// Barrier VÀO
+const int IR_TRUOC_VAO = 15;
+const int IR_SAU_VAO   = 34;
+const int SERVO_VAO_PIN = 21;
 
-MFRC522 rfid(PIN_SS, PIN_RST);
-Servo myServo;
+// Barrier RA
+const int IR_TRUOC_RA = 26;
+const int IR_SAU_RA   = 27;
+const int SERVO_RA_PIN = 25;
 
-// ==========================
-// Thời gian / trạng thái
-// ==========================
-bool servoState = false; // false = closed(0°), true = open(90°)
+// Parking slots
+const int IR_PARK[4] = {13, 33, 14, 32};
 
-// Button debounce
-bool lastButtonReading = HIGH;
-bool buttonStableState = HIGH;
-unsigned long lastDebounceTime = 0;
-const unsigned long debounceDelay = 50;
-
-// Barrier IR (lọc 300 ms)
-int lastIrReadingMain = HIGH;      // giá trị đọc gần nhất
-int stableIrMain = HIGH;           // trạng thái đã xác nhận
-unsigned long lastChangeTimeMain = 0;
-const unsigned long barrierConfirmDelay = 200; // 300 ms chống chớp
-
-// Flags controlling RFID-open behavior
-bool openedByRFID = false;         // true nếu barrier vừa mở do RFID và đang chờ xe qua
-bool carDetectedAfterOpen = false; // true nếu IR_MAIN đọc LOW sau khi mở (xe đã vào vùng)
-
-// Parking slots (lọc 3000 ms)
-struct ParkingSlot {
-  int pin;
-  int lastState;
-  int stableState;
-  unsigned long lastChangeTime;
-};
-ParkingSlot slots[4];
-const unsigned long confirmDelay = 3000; // 3s
-
-// RFID debounce
-String lastUid = "";
-unsigned long lastTrigger = 0;
-const unsigned long debounceMs = 5000; // 5s để tránh quét lặp
-
-// Servo angles
+// Servo góc
 const int OPEN_ANGLE = 90;
 const int CLOSED_ANGLE = 0;
 
-// ==========================
-// Helper: smooth move servo
-// ==========================
-void moveServoSmooth(int start, int end, int duration) {
+// ====== RFID ======
+MFRC522 rfid(RFID_SS, RFID_RST);
+
+// ====== Servo ======
+Servo servoVao, servoRa;
+bool servoVaoState = false;
+bool servoRaState = false;
+
+// ====== Thời gian / debounce ======
+const unsigned long CONFIRM_MS = 200;
+const unsigned long SLOT_CONFIRM_MS = 3000;
+const unsigned long RFID_DEBOUNCE_MS = 5000;
+int BARRIER_SPEED_MS = 800;
+
+// ====== Cấu trúc theo dõi IR ======
+struct IRTracker {
+  int pin;
+  int lastRead;
+  int stable;
+  unsigned long lastChange;
+  bool sawLowAfterOpen;
+} beforeVao, afterVao, beforeRa, afterRa, slots[4];
+
+bool openedByRFID_Vao = false;
+bool openedByRFID_Ra  = false;
+
+// ====== MQTT helper ======
+void mqttPublish(const char* topic, const char* msg) {
+  if (client.connected()) client.publish(topic, msg);
+  Serial.printf("[MQTT] %s => %s\n", topic, msg);
+}
+
+// ====== Servo điều khiển ======
+void moveServoSmooth(Servo &s, int start, int end, int dur) {
   if (start == end) return;
   int step = (end > start) ? 1 : -1;
   int steps = abs(end - start);
-  int delayTime = (steps == 0) ? 0 : duration / steps;
-  for (int pos = start; pos != end; pos += step) {
-    myServo.write(pos);
-    if (delayTime > 0) delay(delayTime);
+  int dt = dur / steps;
+  for (int p = start; p != end; p += step) {
+    s.write(p);
+    delay(dt);
   }
-  myServo.write(end);
+  s.write(end);
 }
 
-// ==========================
-// Publish helper
-// ==========================
-void mqttPublish(const char* topic, const char* msg) {
-  if (client.connected()) {
-    client.publish(topic, msg);
-  }
-  Serial.printf("📤 MQTT [%s] => %s\n", topic, msg);
-}
+void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char* source) {
+  if (stateVar == open) return;
 
-// ==========================
-// Toggle servo (manual/MQTT). Does NOT trigger RFID-close logic.
-// ==========================
-void setServoState(bool open, const char* source) {
-  if (servoState == open) {
-    Serial.printf("ℹ️ Servo already %s (requested by %s)\n", open ? "OPEN" : "CLOSED", source);
-    return;
-  }
-  int startAngle = servoState ? OPEN_ANGLE : CLOSED_ANGLE;
-  int targetAngle = open ? OPEN_ANGLE : CLOSED_ANGLE;
-  moveServoSmooth(startAngle, targetAngle, 800);
-  servoState = open;
-  // If manually opened/closed (button or MQTT), we treat openedByRFID = false
-  openedByRFID = false;
-  carDetectedAfterOpen = false;
-  String msg = String("Barrier ") + (open ? "OPEN" : "CLOSE") + " (" + source + ")";
+  int start = stateVar ? OPEN_ANGLE : CLOSED_ANGLE;
+  int target = open ? OPEN_ANGLE : CLOSED_ANGLE;
+
+  moveServoSmooth(s, start, target, BARRIER_SPEED_MS);
+  stateVar = open;
+
+  if (strcmp(which, "BARRIER-VAO") == 0 && !open) openedByRFID_Vao = false;
+  if (strcmp(which, "BARRIER-RA") == 0 && !open) openedByRFID_Ra  = false;
+
+  String msg = String(which) + (open ? " MỞ (" : " ĐÓNG (") + String(source) + ")";
   mqttPublish("status", msg.c_str());
-  Serial.println(msg);
+  Serial.printf("[%s] %s bởi %s\n", which, open ? "MỞ" : "ĐÓNG", source);
 }
 
-// ==========================
-// Button handling (manual open/close)
-// ==========================
-void handleButton() {
-  bool reading = digitalRead(BUTTON_PIN);
-  if (reading != lastButtonReading) lastDebounceTime = millis();
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    if (reading != buttonStableState) {
-      buttonStableState = reading;
-      if (buttonStableState == LOW) {
-        // Toggle manually
-        setServoState(!servoState, "Button");
-      }
-    }
-  }
-  lastButtonReading = reading;
+// ====== Khởi tạo IR ======
+void initTracker(IRTracker &t, int pin) {
+  t.pin = pin;
+  pinMode(pin, INPUT);
+  t.lastRead = digitalRead(pin);
+  t.stable = t.lastRead;
+  t.lastChange = millis();
+  t.sawLowAfterOpen = false;
 }
 
-// ==========================
-// Barrier IR handling with 300ms confirm
-// Logic special: barrier closes automatically only when it was opened by RFID
-// and IR sees LOW (car present) then returns to HIGH (car passed) stabilized.
-// ==========================
-void handleIR_Main() {
-  int reading = digitalRead(IR_PIN_MAIN);
-
-  // detect raw change and record time
-  if (reading != lastIrReadingMain) {
-    lastChangeTimeMain = millis();
-    lastIrReadingMain = reading;
+// ====== Xử lý cảm biến trước ======
+void handleBefore(IRTracker &t) {
+  int r = digitalRead(t.pin);
+  if (r != t.lastRead) {
+    t.lastChange = millis();
+    t.lastRead = r;
   }
+  if (millis() - t.lastChange >= CONFIRM_MS) {
+    t.stable = r;
+  }
+}
 
-  // confirm if stable for barrierConfirmDelay
-  if ((millis() - lastChangeTimeMain) >= barrierConfirmDelay) {
-    if (reading != stableIrMain) {
-      // stable state changed
-      stableIrMain = reading;
-
-      if (stableIrMain == LOW) {
-        // Car present at sensor
-        Serial.println("🚗 IR_MAIN: CO XE (stable)");
-        mqttPublish("parking/barrier", "CO XE");
-        // mark that car passed into sensor after an RFID open
-        if (openedByRFID) {
-          carDetectedAfterOpen = true;
-          Serial.println("🔔 Car detected after RFID-open -> waiting for car to leave to close barrier");
-        }
+// ====== Xử lý cảm biến sau ======
+void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, Servo &servo, bool &servoState, const char* which) {
+  int r = digitalRead(tAfter.pin);
+  if (r != tAfter.lastRead) {
+    tAfter.lastChange = millis();
+    tAfter.lastRead = r;
+  }
+  if (millis() - tAfter.lastChange >= CONFIRM_MS) {
+    if (r != tAfter.stable) {
+      tAfter.stable = r;
+      String topic = String("parking/") + topicName;
+      if (r == LOW) {
+        mqttPublish(topic.c_str(), "CO XE");
+        if (openedByRFID) tAfter.sawLowAfterOpen = true;
       } else {
-        // stable HIGH = no car at sensor
-        Serial.println("🅿️ IR_MAIN: TRONG (stable)");
-        mqttPublish("parking/barrier", "TRONG");
-        // If previously opened by RFID and we already detected car present, now it's left -> close
-        if (openedByRFID && carDetectedAfterOpen) {
-          Serial.println("✅ Car passed through -> closing barrier (triggered by IR_MAIN)");
-          setServoState(false, "IR_Passed");
-          // publish specific close reason
-          mqttPublish("status", "Barrier CLOSE (IR Passed)");
-          // reset flags
+        mqttPublish(topic.c_str(), "TRONG");
+        if (openedByRFID && tAfter.sawLowAfterOpen) {
+          setServo(servo, servoState, false, which, "IR_Passed");
           openedByRFID = false;
-          carDetectedAfterOpen = false;
+          tAfter.sawLowAfterOpen = false;
         }
       }
     }
   }
-
-  // allow manual button only when no car at sensor (stable)
-  if (stableIrMain == HIGH) handleButton();
 }
 
-// ==========================
-// Parking slot handler (3s confirm)
-// ==========================
-void handleParkingSlot(int i) {
-  int reading = digitalRead(slots[i].pin);
-
-  if (reading != slots[i].lastState) {
-    slots[i].lastChangeTime = millis();
-    slots[i].lastState = reading;
-  }
-
-  if ((millis() - slots[i].lastChangeTime) >= confirmDelay) {
-    if (slots[i].stableState != reading) {
-      slots[i].stableState = reading;
-
-      String msg = "P" + String(i + 1) + " ";
-      msg += (reading == LOW) ? "CO XE" : "TRONG";
-
-      String topic = "parking/slot" + String(i + 1);
-      mqttPublish(topic.c_str(), msg.c_str());
-      Serial.printf("🏁 %s -> %s\n", topic.c_str(), msg.c_str());
+// ====== Parking slot ======
+void handleSlots() {
+  for (int i=0;i<4;i++) {
+    int r = digitalRead(slots[i].pin);
+    if (r != slots[i].lastRead) {
+      slots[i].lastChange = millis();
+      slots[i].lastRead = r;
+    }
+    if (millis() - slots[i].lastChange >= SLOT_CONFIRM_MS) {
+      if (slots[i].stable != r) {
+        slots[i].stable = r;
+        String topic = String("parking/slot") + String(i+1);
+        String payload = String("P") + String(i+1) + (r==LOW ? " CO XE" : " TRONG");
+        mqttPublish(topic.c_str(), payload.c_str());
+      }
     }
   }
 }
 
-// ==========================
-// RFID handling
-// - On detection: open barrier (no auto-close here).
-// - Set openedByRFID = true and carDetectedAfterOpen = false.
-// - Debounce to avoid repeated triggers.
-// ==========================
+// ====== RFID xử lý ======
+String lastUid = "";
+unsigned long lastTrigger = 0;
 void handleRFID() {
   if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) return;
 
@@ -232,147 +178,99 @@ void handleRFID() {
   }
   uid.toUpperCase();
 
-  Serial.println("----------------------------------");
-  Serial.println("✅ RFID detected");
-  Serial.print("🆔 UID: ");
-  Serial.println(uid);
-
   unsigned long now = millis();
-  if (uid != lastUid || (now - lastTrigger >= debounceMs)) {
+  if (uid != lastUid || now - lastTrigger >= RFID_DEBOUNCE_MS) {
     lastUid = uid;
     lastTrigger = now;
 
-    // Open barrier if currently closed
-    if (!servoState) {
-      Serial.println("⚙️ Opening barrier (RFID request)...");
-      setServoState(true, "RFID");
-      // Set the RFID-open flow: wait for car detection then close
-      openedByRFID = true;
-      carDetectedAfterOpen = false;
-      mqttPublish("status", "Barrier OPEN (RFID)");
-      // Do NOT auto-close here; closing will happen after IR detection sequence
+    int vao = beforeVao.stable;
+    int ra  = beforeRa.stable;
+
+    if (vao == LOW && ra == HIGH) {
+      if (!servoVaoState) {
+        setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "RFID");
+        openedByRFID_Vao = true;
+        afterVao.sawLowAfterOpen = false;
+      }
+    } else if (ra == LOW && vao == HIGH) {
+      if (!servoRaState) {
+        setServo(servoRa, servoRaState, true, "BARRIER-RA", "RFID");
+        openedByRFID_Ra = true;
+        afterRa.sawLowAfterOpen = false;
+      }
     } else {
-      Serial.println("ℹ️ Barrier already open; RFID scan accepted but no action taken.");
+      mqttPublish("status", "KHONG XAC DINH HUONG (VAO/RA)");
     }
-  } else {
-    Serial.println("⏸ RFID ignored (debounce)");
   }
 
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
 }
 
-// ==========================
-// MQTT callback
-// ==========================
+// ====== MQTT callback ======
 void callback(char* topic, byte* payload, unsigned int length) {
-  char msg[100];
-  unsigned int copyLen = min(length, (unsigned int)sizeof(msg) - 1);
-  for (unsigned int i = 0; i < copyLen; i++) msg[i] = (char)payload[i];
+  char msg[128];
+  unsigned int copyLen = min(length, (unsigned int)sizeof(msg)-1);
+  memcpy(msg, payload, copyLen);
   msg[copyLen] = '\0';
 
-  Serial.printf("📩 MQTT [%s]: %s\n", topic, msg);
-
   if (strcmp(topic, "barrier") == 0) {
-    if (strcmp(msg, "OPEN") == 0) {
-      // only open if sensor is clear (no car blocking after barrier)
-      if (stableIrMain == HIGH) {
-        setServoState(true, "MQTT");
-      } else {
-        Serial.println("⚠️ MQTT OPEN ignored: IR_MAIN busy");
-      }
-    } else if (strcmp(msg, "CLOSE") == 0) {
-      // manual close request allowed only if no car currently at sensor
-      if (stableIrMain == HIGH) {
-        setServoState(false, "MQTT");
-      } else {
-        Serial.println("⚠️ MQTT CLOSE ignored: IR_MAIN busy");
-      }
-    }
+    if (strcmp(msg, "OPEN_VAO") == 0)
+      setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "MQTT");
+    else if (strcmp(msg, "CLOSE_VAO") == 0)
+      setServo(servoVao, servoVaoState, false, "BARRIER-VAO", "MQTT");
+    else if (strcmp(msg, "OPEN_RA") == 0)
+      setServo(servoRa, servoRaState, true, "BARRIER-RA", "MQTT");
+    else if (strcmp(msg, "CLOSE_RA") == 0)
+      setServo(servoRa, servoRaState, false, "BARRIER-RA", "MQTT");
   }
 }
 
-// ==========================
-// MQTT reconnect
-// ==========================
+// ====== MQTT reconnect ======
 void reconnect() {
   while (!client.connected()) {
-    Serial.print("🔗 Connecting to MQTT...");
     String clientID = "ESP32Client-" + String(random(0xffff), HEX);
     if (client.connect(clientID.c_str(), mqtt_username, mqtt_password)) {
-      Serial.println("✅ MQTT connected");
       client.subscribe("barrier");
-    } else {
-      Serial.printf("❌ MQTT failed (%d). Retry in 5s\n", client.state());
-      delay(5000);
-    }
+    } else delay(2000);
   }
 }
 
-// ==========================
-// Setup
-// ==========================
+// ====== setup ======
 void setup() {
   Serial.begin(115200);
-  delay(50);
-  Serial.println("----------------------------------");
-  Serial.println("🔹 SYSTEM START: RFID + Barrier + IR + MQTT");
-  Serial.println("----------------------------------");
-
-  // SPI for RC522: pass SCK, MISO, MOSI
-  SPI.begin(PIN_SCK, PIN_MISO, PIN_MOSI);
+  SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI);
   rfid.PCD_Init();
-  Serial.println("✅ RC522 initialized");
 
-  // pins
-  pinMode(BUTTON_PIN, INPUT_PULLUP);
-  pinMode(IR_PIN_MAIN, INPUT);
-  for (int i = 0; i < 4; i++) {
-    slots[i].pin = IR_PARK[i];
-    pinMode(slots[i].pin, INPUT);
-    slots[i].lastState = HIGH;
-    slots[i].stableState = HIGH;
-    slots[i].lastChangeTime = 0;
-  }
+  initTracker(beforeVao, IR_TRUOC_VAO);
+  initTracker(afterVao, IR_SAU_VAO);
+  initTracker(beforeRa, IR_TRUOC_RA);
+  initTracker(afterRa, IR_SAU_RA);
+  for (int i=0;i<4;i++) initTracker(slots[i], IR_PARK[i]);
 
-  // servo
-  myServo.attach(SERVO_PIN, 500, 2500);
-  myServo.write(CLOSED_ANGLE);
-  servoState = false;
-  Serial.printf("✅ Servo attached to pin %d (closed)\n", SERVO_PIN);
+  servoVao.attach(SERVO_VAO_PIN, 500, 2500);
+  servoRa.attach(SERVO_RA_PIN, 500, 2500);
+  servoVao.write(CLOSED_ANGLE);
+  servoRa.write(CLOSED_ANGLE);
 
-  // WiFi + MQTT
   WiFi.begin(ssid, password);
   espClient.setInsecure();
   client.setServer(mqtt_server, mqtt_port);
   client.setCallback(callback);
-
-  Serial.print("📶 Connecting WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("\n✅ WiFi connected");
-  Serial.print("📡 IP: ");
-  Serial.println(WiFi.localIP());
+  while (WiFi.status() != WL_CONNECTED) { delay(300); }
 }
 
-// ==========================
-// Main loop
-// ==========================
+// ====== loop ======
 void loop() {
   if (!client.connected()) reconnect();
   client.loop();
 
-  // IR main handles button internally
-  handleIR_Main();
-
-  // parking slots
-  for (int i = 0; i < 4; i++) handleParkingSlot(i);
-
-  // RFID
+  handleBefore(beforeVao);
+  handleBefore(beforeRa);
   handleRFID();
+  handleAfter(afterVao, openedByRFID_Vao, "IR_SAU_VAO", servoVao, servoVaoState, "BARRIER-VAO");
+  handleAfter(afterRa, openedByRFID_Ra, "IR_SAU_RA", servoRa, servoRaState, "BARRIER-RA");
+  handleSlots();
 
-  // small yield
   delay(5);
 }
