@@ -1,20 +1,25 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
 #include <SPI.h>
 #include <MFRC522.h>
 #include <ESP32Servo.h>
 
-// ====== WiFi & MQTT ======
+// ====== Thư viện tích hợp ======
+#include <FirebaseESP32.h>
+#include <time.h> // Thư viện thời gian NTP
+
+// ====== WiFi ======
 const char* ssid = "Kaka";
 const char* password = "12345678";
-const char* mqtt_server = "9e248d5939004b50ba39f2f789574339.s1.eu.hivemq.cloud";
-const int mqtt_port = 8883;
-const char* mqtt_username = "cloud";
-const char* mqtt_password = "Anhtuan123";
-WiFiClientSecure espClient;
-PubSubClient client(espClient);
+
+// ====== Cấu hình Firebase (Lấy từ file test của bạn) ======
+#define FIREBASE_HOST "https://car01-351f6-default-rtdb.firebaseio.com/"
+#define FIREBASE_AUTH "snEXxxKZBN2MamzCNPH9B8sp0KTB3wP3nSzh0fvy"
+
+// --- Đối tượng Firebase ---
+FirebaseData fbdo; // Đối tượng dùng chung cho các hàm set/push
+FirebaseAuth auth;
+FirebaseConfig config;
 
 // ====== PIN mapping ======
 const int RFID_SCK = 18, RFID_MISO = 19, RFID_MOSI = 23, RFID_SS = 5, RFID_RST = 2;
@@ -47,7 +52,7 @@ bool servoRaState = false; // false = Đóng, true = Mở
 
 // ====== Thời gian / debounce ======
 const unsigned long CONFIRM_MS = 200;       // Debounce cho cảm biến rào cản
-const unsigned long SLOT_CONFIRM_MS = 3000; // Debounce cho cảm biến đỗ xe (dài hơn để tránh nháy)
+const unsigned long SLOT_CONFIRM_MS = 3000; // Debounce cho cảm biến đỗ xe
 const unsigned long RFID_DEBOUNCE_MS = 5000; // Thời gian chờ để quét lại cùng 1 thẻ
 
 // ====== Cấu trúc theo dõi IR ======
@@ -64,23 +69,95 @@ IRTracker beforeVao, afterVao, beforeRa, afterRa, slots[4];
 bool openedByRFID_Vao = false;
 bool openedByRFID_Ra  = false;
 
-// ====== MQTT helper ======
-void mqttPublish(const char* topic, const char* msg) {
-  if (client.connected()) {
-    client.publish(topic, msg);
-  }
-  Serial.printf("[MQTT] %s => %s\n", topic, msg);
+// ===========================================
+// ====== CÁC HÀM FIREBASE (Từ file test) ======
+// ===========================================
+
+// --- Khởi tạo Firebase ---
+void initFirebase() {
+  config.host = FIREBASE_HOST;
+  config.signer.tokens.legacy_token = FIREBASE_AUTH;
+
+  Firebase.reconnectWiFi(true);
+  Firebase.begin(&config, &auth);
+  Serial.println("✅ Kết nối Firebase thành công!");
 }
 
-// ====== Servo điều khiển (ĐÃ SỬA) ======
-/*
- * Hàm moveServoSmooth đã bị XÓA.
- * Nó gây ra lỗi "blocking", làm dừng toàn bộ ESP32 trong 800ms.
- * Trong 800ms đó, ESP không thể đọc cảm biến, không thể quét RFID,
- * và có thể bị ngắt kết nối MQTT.
- * Chúng ta sẽ thay thế bằng cách gọi servo.write() trực tiếp.
- */
+// --- Hàm lấy ngày hiện tại (yyyy-mm-dd) ---
+String getCurrentDate() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("❌ Không lấy được thời gian!");
+    return "unknown_date";
+  }
 
+  char buffer[20];
+  strftime(buffer, sizeof(buffer), "%Y-%m-%d", &timeinfo);
+  return String(buffer);
+}
+
+// --- Hàm lấy giờ hiện tại (hh:mm:ss) ---
+String getCurrentTime() {
+  struct tm timeinfo;
+  if (!getLocalTime(&timeinfo)) {
+    return "00:00:00";
+  }
+
+  char buffer[10];
+  strftime(buffer, sizeof(buffer), "%H:%M:%S", &timeinfo);
+  return String(buffer);
+}
+
+// ==================================================
+// ====== CÁC HÀM TRỢ GIÚP FIREBASE (Hàm mới) ======
+// ==================================================
+
+/**
+ * @brief Ghi một log sự kiện lên Firebase (dùng pushJSON để tạo ID duy nhất)
+ * @param type Loại sự kiện (ví dụ: "RFIDScan", "Barrier", "RFIDError")
+ * @param message Nội dung thông điệp
+ */
+void firebaseLog(String type, String message) {
+  String date = getCurrentDate();
+  if (date == "unknown_date") {
+    Serial.println("❌ Không thể log Firebase, chưa đồng bộ thời gian NTP.");
+    return;
+  }
+  String timeNow = getCurrentTime();
+  String path = "/logs/" + date; // Ghi log theo ngày
+
+  FirebaseJson json;
+  json.set("type", type);
+  json.set("message", message);
+  json.set("time", timeNow);
+
+  // Chúng ta dùng pushJSON để tạo 1 ID log duy nhất
+  if (Firebase.pushJSON(fbdo, path, json)) {
+    Serial.printf("✅ FB Log: [%s] %s\n", type.c_str(), message.c_str());
+  } else {
+    Serial.println("❌ Lỗi log Firebase: " + fbdo.errorReason());
+  }
+}
+
+/**
+ * @brief Cập nhật trạng thái (ghi đè) lên một đường dẫn Firebase
+ * @param path Đường dẫn (ví dụ: "parking/slot1", "parking/barrierVao")
+ * @param value Giá trị (ví dụ: "CO XE", "OPEN")
+ */
+void updateFirebaseState(String path, String value) {
+  if (Firebase.setString(fbdo, path, value)) {
+    Serial.printf("✅ FB State: %s -> %s\n", path.c_str(), value.c_str());
+  } else {
+    Serial.println("❌ Lỗi cập nhật state Firebase: " + fbdo.errorReason());
+  }
+}
+
+
+// ==================================================
+// ====== CÁC HÀM LOGIC BÃI ĐỖ XE (Đã sửa) ======
+// ==================================================
+
+// ====== Servo điều khiển (Đã sửa để dùng Firebase) ======
 void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char* source) {
   // Nếu đã ở đúng trạng thái thì không làm gì
   if (stateVar == open) return;
@@ -88,9 +165,7 @@ void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char
   int target = open ? OPEN_ANGLE : CLOSED_ANGLE;
 
   // Ghi trực tiếp, không-chặn (non-blocking)
-  // Servo sẽ di chuyển nhanh nhất có thể, nhưng hệ thống vẫn phản hồi
   s.write(target);
-  
   stateVar = open; // Cập nhật trạng thái
 
   // Logic reset cờ khi đóng rào cản
@@ -103,31 +178,29 @@ void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char
     afterRa.sawLowAfterOpen = false; // Reset luôn cờ này khi đóng
   }
 
+  // --- Thay thế MQTT ---
   String msg = String(which) + (open ? " MỞ (" : " ĐÓNG (") + String(source) + ")";
-  mqttPublish("status", msg.c_str());
+  // 1. Ghi log sự kiện
+  firebaseLog("Barrier", msg); 
+  // 2. Cập nhật trạng thái
+  String statePath = (strcmp(which, "BARRIER-VAO") == 0) ? "/parking/barrierVao" : "/parking/barrierRa";
+  updateFirebaseState(statePath, open ? "OPEN" : "CLOSED");
+  // --- Hết thay thế ---
+
   Serial.printf("[%s] %s bởi %s\n", which, open ? "MỞ" : "ĐÓNG", source);
 }
 
 // ====== Khởi tạo IR ======
 void initTracker(IRTracker &t, int pin) {
-  t.pin = pin;
-  
   // CẢNH BÁO QUAN TRỌNG VỀ PHẦN CỨNG:
-  // Các pin 32, 33, 34, 35, 36, 39 là INPUT_ONLY (chỉ đọc)
-  // Chúng KHÔNG có điện trở pull-up/pull-down nội.
-  // Bạn PHẢI dùng điện trở pull-up (ví dụ 10K Ohm nối 3.3V) bên ngoài
-  // cho các pin IR_SAU_VAO (34), IR_PARK[1] (33), IR_PARK[3] (32)
-  // nếu cảm biến của bạn là loại collector hở (open-collector).
   if (pin >= 32) {
-     pinMode(pin, INPUT);
-     Serial.printf("Cảnh báo: Pin %d là INPUT_ONLY. Hãy chắc chắn có điện trở kéo bên ngoài!\n", pin);
+      pinMode(pin, INPUT);
+      Serial.printf("Cảnh báo: Pin %d là INPUT_ONLY. Hãy chắc chắn có điện trở kéo bên ngoài!\n", pin);
   } else {
-     // Các pin khác có thể dùng pull-up/pull-down nội.
-     // Giả sử cảm biến IR cho mức LOW khi có vật cản,
-     // chúng ta dùng INPUT_PULLUP để khi không có vật cản, nó đọc HIGH.
-     pinMode(pin, INPUT_PULLUP);
+      pinMode(pin, INPUT_PULLUP);
   }
   
+  t.pin = pin;
   t.lastRead = digitalRead(pin);
   t.stable = t.lastRead;
   t.lastChange = millis();
@@ -148,7 +221,7 @@ void handleBefore(IRTracker &t) {
   }
 }
 
-// ====== Xử lý cảm biến sau (logic đóng rào cản) ======
+// ====== Xử lý cảm biến sau (logic đóng rào cản) (Đã sửa để dùng Firebase) ======
 void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, Servo &servo, bool &servoState, const char* which) {
   int r = digitalRead(tAfter.pin);
   
@@ -161,16 +234,22 @@ void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, S
   // Chỉ xử lý khi trạng thái ổn định thay đổi
   if (millis() - tAfter.lastChange >= CONFIRM_MS && r != tAfter.stable) {
     tAfter.stable = r;
-    String topic = String("parking/") + topicName;
+    String topic = String("parking/") + topicName; // Đường dẫn Firebase (ví dụ: parking/IR_SAU_VAO)
     
     if (r == LOW) { // Xe vừa đến cảm biến SAU
-      mqttPublish(topic.c_str(), "CO XE");
+      // --- Thay thế MQTT ---
+      updateFirebaseState(topic, "CO XE");
+      // --- Hết thay thế ---
+      
       if (openedByRFID) {
         // Đánh dấu là đã thấy xe đi qua
         tAfter.sawLowAfterOpen = true; 
       }
     } else { // Xe vừa rời cảm biến SAU (r == HIGH)
-      mqttPublish(topic.c_str(), "TRONG");
+      // --- Thay thế MQTT ---
+      updateFirebaseState(topic, "TRONG");
+      // --- Hết thay thế ---
+      
       // Chỉ đóng nếu rào cản được mở bằng RFID VÀ chúng ta đã thấy xe đi qua
       if (openedByRFID && tAfter.sawLowAfterOpen) {
         setServo(servo, servoState, false, which, "IR_Passed");
@@ -180,7 +259,7 @@ void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, S
   }
 }
 
-// ====== Parking slot (ĐÃ SỬA payload) ======
+// ====== Parking slot (Đã sửa để dùng Firebase) ======
 void handleSlots() {
   for (int i=0;i<4;i++) {
     int r = digitalRead(slots[i].pin);
@@ -194,17 +273,17 @@ void handleSlots() {
       if (slots[i].stable != r) {
         slots[i].stable = r;
         String topic = String("parking/slot") + String(i+1);
-        
-        // Tinh chỉnh: Payload chỉ cần trạng thái, topic đã chỉ rõ là slot nào
         String payload = (r==LOW ? "CO XE" : "TRONG"); 
         
-        mqttPublish(topic.c_str(), payload.c_str());
+        // --- Thay thế MQTT ---
+        updateFirebaseState(topic, payload);
+        // --- Hết thay thế ---
       }
     }
   }
 }
 
-// ====== RFID xử lý ======
+// ====== RFID xử lý (Đã sửa để dùng Firebase) ======
 String lastUid = "";
 unsigned long lastTrigger = 0;
 void handleRFID() {
@@ -221,21 +300,21 @@ void handleRFID() {
   }
   uid.toUpperCase();
 
-  // 3. Debounce thẻ (tránh quét 1 thẻ 10 lần/giây)
+  // 3. Debounce thẻ
   unsigned long now = millis();
   if (uid == lastUid && (now - lastTrigger < RFID_DEBOUNCE_MS)) {
-    // Thẻ này vừa được quét, bỏ qua
-    rfid.PICC_HaltA(); // Dừng đọc thẻ
+    rfid.PICC_HaltA();
     rfid.PCD_StopCrypto1();
     return;
   }
   
-  // Nếu là thẻ mới, hoặc đã hết thời gian debounce -> xử lý
   lastUid = uid;
   lastTrigger = now;
   
   Serial.printf("RFID Quet: %s\n", uid.c_str());
-  mqttPublish("rfid/scan", uid.c_str()); // Gửi UID lên MQTT
+  // --- Thay thế MQTT ---
+  firebaseLog("RFIDScan", uid); // Gửi UID lên Firebase
+  // --- Hết thay thế ---
 
   // 4. Kiểm tra logic hướng
   int vao = beforeVao.stable;
@@ -245,16 +324,18 @@ void handleRFID() {
     if (!servoVaoState) { // Nếu rào cản đang đóng
       setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "RFID");
       openedByRFID_Vao = true;
-      afterVao.sawLowAfterOpen = false; // Chuẩn bị cờ để theo dõi xe
+      afterVao.sawLowAfterOpen = false; 
     }
   } else if (ra == LOW && vao == HIGH) { // Xe đang ở cổng RA
     if (!servoRaState) { // Nếu rào cản đang đóng
       setServo(servoRa, servoRaState, true, "BARRIER-RA", "RFID");
       openedByRFID_Ra = true;
-      afterRa.sawLowAfterOpen = false; // Chuẩn bị cờ để theo dõi xe
+      afterRa.sawLowAfterOpen = false; 
     }
   } else {
-    mqttPublish("status", "HUONG KHONG XAC DINH (RFID)");
+    // --- Thay thế MQTT ---
+    firebaseLog("RFIDError", "HUONG KHONG XAC DINH");
+    // --- Hết thay thế ---
     Serial.println("RFID Quet nhung huong khong ro rang (ca hai hoac khong cam bien nao active)");
   }
 
@@ -263,53 +344,7 @@ void handleRFID() {
   rfid.PCD_StopCrypto1();
 }
 
-// ====== MQTT callback ======
-void callback(char* topic, byte* payload, unsigned int length) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("] ");
-
-  char msg[128];
-  // Đảm bảo không tràn bộ đệm và luôn kết thúc bằng null
-  unsigned int copyLen = min(length, (unsigned int)sizeof(msg)-1);
-  memcpy(msg, payload, copyLen);
-  msg[copyLen] = '\0';
-  Serial.println(msg);
-
-  if (strcmp(topic, "barrier") == 0) {
-    if (strcmp(msg, "OPEN_VAO") == 0)
-      setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "MQTT");
-    else if (strcmp(msg, "CLOSE_VAO") == 0)
-      setServo(servoVao, servoVaoState, false, "BARRIER-VAO", "MQTT");
-    else if (strcmp(msg, "OPEN_RA") == 0)
-      setServo(servoRa, servoRaState, true, "BARRIER-RA", "MQTT");
-    else if (strcmp(msg, "CLOSE_RA") == 0)
-      setServo(servoRa, servoRaState, false, "BARRIER-RA", "MQTT");
-  }
-}
-
-// ====== MQTT reconnect ======
-void reconnect() {
-  // Loop cho đến khi kết nối lại
-  while (!client.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    String clientID = "ESP32_Parking_" + String(random(0xffff), HEX);
-    
-    if (client.connect(clientID.c_str(), mqtt_username, mqtt_password)) {
-      Serial.println("connected");
-      mqttPublish("status", "ESP32 RECONNECTED");
-      // Đăng ký topic
-      client.subscribe("barrier");
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(client.state());
-      Serial.println(" try again in 2 seconds");
-      delay(2000); // Chờ 2 giây trước khi thử lại
-    }
-  }
-}
-
-// ====== setup ======
+// ====== setup (Đã sửa) ======
 void setup() {
   Serial.begin(115200);
   Serial.println("Booting...");
@@ -332,39 +367,39 @@ void setup() {
   servoRa.attach(SERVO_RA_PIN, 500, 2500);
   servoVao.write(CLOSED_ANGLE);
   servoRa.write(CLOSED_ANGLE);
-  servoVaoState = false; // Trạng thái ban đầu là đóng
+  servoVaoState = false; 
   servoRaState = false;
   Serial.println("Servos Initialized.");
 
-  // Khởi
+  // Kết nối WiFi
   WiFi.begin(ssid, password);
+  Serial.print("Đang kết nối WiFi: ");
+  Serial.println(ssid);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\nWiFi connected.");
+  Serial.println("\n✅ WiFi đã kết nối!");
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  // SSL/TLS cho MQTT
-  // setInsecure() bỏ qua xác thực chứng chỉ.
-  // Tiện lợi cho test, nhưng không an toàn cho production.
-  espClient.setInsecure(); 
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
+  // --- Tích hợp Firebase & NTP ---
+  // Đồng bộ thời gian từ Internet (NTP)
+  configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov"); // GMT+7 (Việt Nam)
+  Serial.println("⏰ Đồng bộ thời gian NTP...");
 
-  reconnect(); // Kết nối MQTT lần đầu
+  // Khởi tạo Firebase
+  initFirebase();
+  // --- Hết phần tích hợp ---
+
+  // (Phần khởi tạo MQTT và callback đã bị xóa)
 }
 
-// ====== loop ======
+// ====== loop (Đã sửa) ======
 void loop() {
-  // 1. Duy trì kết nối MQTT
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop(); // Rất quan trọng, phải gọi thường xuyên
+  // (Phần kết nối lại và loop MQTT đã bị xóa)
 
-  // 2. Đọc cảm biến
+  // 1. Đọc cảm biến
   handleBefore(beforeVao);
   handleBefore(beforeRa);
   handleAfter(afterVao, openedByRFID_Vao, "IR_SAU_VAO", servoVao, servoVaoState, "BARRIER-VAO");
@@ -372,10 +407,9 @@ void loop() {
   
   handleSlots();
 
-  // 3. Xử lý RFID (đặt cuối cùng vì nó có logic phức tạp)
+  // 2. Xử lý RFID
   handleRFID();
 
-  // Delay nhỏ để tránh loop() chạy quá nhanh, 
-  // nhường thời gian cho các tác vụ nền (như WiFi)
+  // Delay nhỏ để tránh loop() chạy quá nhanh
   delay(5); 
 }

@@ -1,374 +1,600 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Bãi đỗ xe thông minh - MQTT (HiveMQ)</title>
-<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{
-    font-family:"Segoe UI", -apple-system, sans-serif;
-    background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);
-    min-height:100vh;padding:16px;
-  }
-  .main-container{max-width:1100px;margin:0 auto}
-  header{color:#fff;padding:12px;margin-bottom:12px;background:rgba(255,255,255,0.08);backdrop-filter:blur(8px);border-radius:12px;text-align:center}
-  header h1{font-size:1.4rem;margin-bottom:6px;text-shadow:2px 2px 6px rgba(0,0,0,0.18)}
-  .connection-status{display:inline-block;padding:6px 14px;border-radius:14px;font-size:0.9rem;font-weight:700;background:rgba(255,255,255,0.16)}
-  .connection-status.connected{background:#10b981;color:#fff}
-  .connection-status.disconnected{background:#ef4444;color:#fff}
-  .top-grid{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-bottom:12px}
-  .bottom-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .card{background:#fff;padding:14px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,0.08)}
-  .card h2{color:#667eea;font-size:1rem;margin-bottom:10px;display:flex;align-items:center;gap:8px}
-  .parking-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-  .parking-slot{padding:10px 6px;border-radius:10px;text-align:center;font-weight:700;transition:all .25s;border:2px solid transparent;cursor:pointer}
-  .parking-slot.unknown{background:linear-gradient(135deg,#e9ecef 0%,#dee2e6 100%);color:#6c757d;border-color:#adb5bd}
-  .parking-slot.occupied{background:linear-gradient(135deg,#fee2e2 0%,#fecaca 100%);color:#dc2626;border-color:#ef4444;animation:pulse 2s ease-in-out infinite}
-  .parking-slot.available{background:linear-gradient(135deg,#d1fae5 0%,#a7f3d0 100%);color:#059669;border-color:#10b981}
-  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.8}}
-  .slot-icon{font-size:1.3rem;display:block;margin-bottom:4px}
-  .slot-label{font-size:.85rem;display:block;margin-bottom:2px}
-  .slot-status{font-size:.75rem;opacity:.9}
-  .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .stat-item{background:linear-gradient(135deg,#f5f7fa 0%,#e9ecef 100%);padding:12px;border-radius:10px;text-align:center}
-  .stat-value{font-size:1.6rem;font-weight:800;color:#667eea;display:block;margin-bottom:4px}
-  .barrier-controls{display:flex;gap:10px}
-  .barrier-btn{flex:1;padding:12px;border-radius:10px;border:2px solid transparent;background:linear-gradient(135deg,#f5f7fa 0%,#e9ecef 100%);cursor:pointer;transition:all .2s;font-weight:700;position:relative}
-  .barrier-btn:hover{transform:translateY(-3px);box-shadow:0 10px 20px rgba(0,0,0,0.08)}
-  .barrier-btn.active{background:linear-gradient(135deg,#10b981 0%,#059669 100%);color:#fff;border-color:#10b981}
-  .barrier-indicator{position:absolute;top:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px rgba(239,68,68,0.2)}
-  .barrier-btn.active .barrier-indicator{background:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,0.15)}
-  .activity-log{max-height:240px;overflow-y:auto;padding-right:6px}
-  .activity-item{display:flex;align-items:flex-start;gap:10px;padding:10px;background:linear-gradient(135deg,#f5f7fa 0%,#e9ecef 100%);border-radius:10px;margin-bottom:8px;border-left:3px solid #667eea}
-  .activity-item.new{animation:slideIn .35s ease}
-  @keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
-  .activity-icon{font-size:1.2rem;flex-shrink:0}
-  .activity-text{font-size:.9rem;color:#222;font-weight:700;margin-bottom:4px}
-  .activity-time{font-size:.75rem;color:#666}
-  .empty-activity{text-align:center;padding:30px;color:#999;font-size:.95rem}
-  .sensor-status{background:linear-gradient(135deg,#f5f7fa 0%,#e9ecef 100%);padding:12px;border-radius:10px;margin-top:12px}
-  .sensor-status h3{color:#667eea;margin-bottom:8px;font-size:.95rem}
-  .sensor-text{color:#333;line-height:1.4;font-size:.9rem}
-  @media (max-width:768px){
-    .top-grid{grid-template-columns:1fr}
-    .bottom-grid{grid-template-columns:1fr}
-    .parking-grid{grid-template-columns:repeat(2,1fr)}
-    .barrier-controls{flex-direction:column}
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ Thống Bãi Đỗ Xe Thông Minh</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background-color: #4ade80;
+        }
+
+        .status-indicator.disconnected {
+            background-color: #f87171;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .barrier-section {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .barrier-item {
+            flex: 1;
+            min-width: 200px;
+            padding: 20px;
+            border-radius: 10px;
+            background: #f8fafc;
+            border: 3px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .barrier-item.open {
+            background: #dcfce7;
+            border-color: #22c55e;
+        }
+
+        .barrier-item.closed {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
+        .barrier-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #1e293b;
+        }
+
+        .barrier-status {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .barrier-status.open {
+            color: #16a34a;
+        }
+
+        .barrier-status.closed {
+            color: #dc2626;
+        }
+
+        .barrier-icon {
+            font-size: 3em;
+            text-align: center;
+            margin: 10px 0;
+        }
+
+        .parking-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .parking-slot {
+            padding: 20px;
+            border-radius: 10px;
+            border: 3px solid #e2e8f0;
+            background: #f8fafc;
+            text-align: center;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .parking-slot.occupied {
+            background: #fee2e2;
+            border-color: #ef4444;
+        }
+
+        .parking-slot.available {
+            background: #dcfce7;
+            border-color: #22c55e;
+        }
+
+        .slot-number {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #1e293b;
+            margin-bottom: 10px;
+        }
+
+        .slot-icon {
+            font-size: 3em;
+            margin: 10px 0;
+        }
+
+        .slot-status {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .slot-status.occupied {
+            color: #dc2626;
+        }
+
+        .slot-status.available {
+            color: #16a34a;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f1f5f9;
+            border-radius: 10px;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .summary-label {
+            color: #64748b;
+            margin-top: 5px;
+        }
+
+        .logs-section {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            background: #f8fafc;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-item.rfid {
+            border-left-color: #3b82f6;
+        }
+
+        .log-item.barrier {
+            border-left-color: #8b5cf6;
+        }
+
+        .log-item.error {
+            border-left-color: #ef4444;
+        }
+
+        .log-message {
+            flex: 1;
+            color: #1e293b;
+        }
+
+        .log-time {
+            color: #64748b;
+            font-size: 0.9em;
+            margin-left: 15px;
+        }
+
+        .log-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .log-type.rfid {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .log-type.barrier {
+            background: #ede9fe;
+            color: #6b21a8;
+        }
+
+        .log-type.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .sensor-status {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .sensor-item {
+            padding: 10px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            font-size: 0.9em;
+        }
+
+        .sensor-item.active {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+        }
+
+        .sensor-label {
+            font-weight: bold;
+            color: #475569;
+            margin-bottom: 5px;
+        }
+
+        .sensor-value {
+            font-weight: bold;
+            color: #0f172a;
+        }
+
+        .last-update {
+            text-align: center;
+            color: white;
+            margin-top: 20px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+    </style>
 </head>
 <body>
-<div class="main-container">
-  <header>
-    <h1>🚗 HỆ THỐNG BÃI ĐỖ XE THÔNG MINH (MQTT)</h1>
-    <div id="connectionStatus" class="connection-status disconnected">⚠️ Đang kết nối...</div>
-  </header>
+    <div class="container">
+        <header>
+            <h1>🚗 HỆ THỐNG BÃI ĐỖ XE THÔNG MINH</h1>
+            <p>
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText">Đang kết nối...</span>
+            </p>
+        </header>
 
-  <div class="top-grid">
-    <div class="card">
-      <h2>🅿️ Trạng thái chỗ đỗ xe</h2>
-      <div class="parking-grid">
-        <div class="parking-slot unknown" id="slot1">
-          <span class="slot-icon">🚗</span>
-          <span class="slot-label">P1</span>
-          <span class="slot-status">Chờ...</span>
-        </div>
-        <div class="parking-slot unknown" id="slot2">
-          <span class="slot-icon">🚗</span>
-          <span class="slot-label">P2</span>
-          <span class="slot-status">Chờ...</span>
-        </div>
-        <div class="parking-slot unknown" id="slot3">
-          <span class="slot-icon">🚗</span>
-          <span class="slot-label">P3</span>
-          <span class="slot-status">Chờ...</span>
-        </div>
-        <div class="parking-slot unknown" id="slot4">
-          <span class="slot-icon">🚗</span>
-          <span class="slot-label">P4</span>
-          <span class="slot-status">Chờ...</span>
-        </div>
-      </div>
+        <div class="main-grid">
+            <!-- Rào chắn -->
+            <div class="card">
+                <div class="card-title">🚧 TRẠNG THÁI RÀO CHẮN</div>
+                <div class="barrier-section">
+                    <div class="barrier-item" id="barrierVao">
+                        <div class="barrier-name">🔽 CỔNG VÀO</div>
+                        <div class="barrier-icon">🚪</div>
+                        <div class="barrier-status">--</div>
+                        <div class="sensor-status">
+                            <div class="sensor-item" id="sensorTruocVao">
+                                <div class="sensor-label">IR Trước</div>
+                                <div class="sensor-value">--</div>
+                            </div>
+                            <div class="sensor-item" id="sensorSauVao">
+                                <div class="sensor-label">IR Sau</div>
+                                <div class="sensor-value">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="barrier-item" id="barrierRa">
+                        <div class="barrier-name">🔼 CỔNG RA</div>
+                        <div class="barrier-icon">🚪</div>
+                        <div class="barrier-status">--</div>
+                        <div class="sensor-status">
+                            <div class="sensor-item" id="sensorTruocRa">
+                                <div class="sensor-label">IR Trước</div>
+                                <div class="sensor-value">--</div>
+                            </div>
+                            <div class="sensor-item" id="sensorSauRa">
+                                <div class="sensor-label">IR Sau</div>
+                                <div class="sensor-value">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-      <div class="sensor-status">
-        <h3>📡 Trạng thái cảm biến</h3>
-        <div class="sensor-text" id="statusMsg">Đang chờ dữ liệu từ ESP32...</div>
-      </div>
+            <!-- Chỗ đỗ xe -->
+            <div class="card">
+                <div class="card-title">🅿️ CHỖ ĐỖ XE</div>
+                <div class="parking-grid">
+                    <div class="parking-slot" id="slot1">
+                        <div class="slot-number">Vị trí 1</div>
+                        <div class="slot-icon">🚗</div>
+                        <div class="slot-status">--</div>
+                    </div>
+                    <div class="parking-slot" id="slot2">
+                        <div class="slot-number">Vị trí 2</div>
+                        <div class="slot-icon">🚗</div>
+                        <div class="slot-status">--</div>
+                    </div>
+                    <div class="parking-slot" id="slot3">
+                        <div class="slot-number">Vị trí 3</div>
+                        <div class="slot-icon">🚗</div>
+                        <div class="slot-status">--</div>
+                    </div>
+                    <div class="parking-slot" id="slot4">
+                        <div class="slot-number">Vị trí 4</div>
+                        <div class="slot-icon">🚗</div>
+                        <div class="slot-status">--</div>
+                    </div>
+                </div>
+                <div class="summary">
+                    <div class="summary-item">
+                        <div class="summary-value" id="totalSlots">4</div>
+                        <div class="summary-label">Tổng số chỗ</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="occupiedSlots">0</div>
+                        <div class="summary-label">Đã đỗ</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" id="availableSlots">4</div>
+                        <div class="summary-label">Còn trống</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Nhật ký hoạt động -->
+        <div class="card">
+            <div class="card-title">📋 NHẬT KÝ HOẠT ĐỘNG</div>
+            <div class="logs-section" id="logsContainer">
+                <p style="text-align: center; color: #64748b;">Đang tải nhật ký...</p>
+            </div>
+        </div>
+
+        <div class="last-update">
+            Cập nhật lần cuối: <span id="lastUpdate">--</span>
+        </div>
     </div>
 
-    <div class="card">
-      <h2>📊 Thống kê</h2>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <span class="stat-value" id="totalSlots">4</span>
-          <span class="stat-label">Tổng chỗ</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value" id="occupiedSlots">0</span>
-          <span class="stat-label">Đang dùng</span>
-        </div>
-        <div class="stat-item">
-          <span class="stat-value" id="availableSlots">0</span>
-          <span class="stat-label">Còn trống</span>
-        </div>
-      </div>
-    </div>
-  </div>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-  <div class="bottom-grid">
-    <div class="card">
-      <h2>🚧 Điều khiển Barrier</h2>
-      <div class="barrier-controls" style="margin-bottom:12px">
-        <div class="barrier-btn" id="barrierVao">
-          <div class="barrier-indicator"></div>
-          <span class="barrier-icon">⬇️</span>
-          <span class="barrier-label">BARRIER VÀO</span>
-          <span class="barrier-status">Đóng</span>
-        </div>
-        <div class="barrier-btn" id="barrierRa">
-          <div class="barrier-indicator"></div>
-          <span class="barrier-icon">⬇️</span>
-          <span class="barrier-label">BARRIER RA</span>
-          <span class="barrier-status">Đóng</span>
-        </div>
-      </div>
+    <script>
+        // Cấu hình Firebase (Đầy đủ)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBYkMMtKTWIoWoqad8kQdjYy-Hdz3fOPaA",
+            authDomain: "car01-351f6.firebaseapp.com",
+            databaseURL: "https://car01-351f6-default-rtdb.firebaseio.com",
+            projectId: "car01-351f6",
+            storageBucket: "car01-351f6.firebasestorage.app",
+            messagingSenderId: "591859155709",
+            appId: "1:591859155709:web:2cd195a4f22d1729fcb494",
+            measurementId: "G-0YB3SJTS72"
+        };
 
-      <div style="display:flex; gap:8px;">
-        <button id="openVaoBtn" class="barrier-btn" style="flex:1">MỞ VÀO</button>
-        <button id="closeVaoBtn" class="barrier-btn" style="flex:1">ĐÓNG VÀO</button>
-      </div>
-      <div style="height:8px"></div>
-      <div style="display:flex; gap:8px;">
-        <button id="openRaBtn" class="barrier-btn" style="flex:1">MỞ RA</button>
-        <button id="closeRaBtn" class="barrier-btn" style="flex:1">ĐÓNG RA</button>
-      </div>
+        // Khởi tạo Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
 
-      <div style="margin-top:12px;">
-        <small style="color:#666">Ghi chú: Lệnh gửi tới topic <code>barrier</code> với payload <code>OPEN_VAO</code>/<code>CLOSE_VAO</code>/<code>OPEN_RA</code>/<code>CLOSE_RA</code>.</small>
-      </div>
-    </div>
+        // Trạng thái kết nối
+        const connectedRef = database.ref('.info/connected');
+        connectedRef.on('value', (snap) => {
+            const statusIndicator = document.getElementById('connectionStatus');
+            const statusText = document.getElementById('connectionText');
+            if (snap.val() === true) {
+                statusIndicator.className = 'status-indicator connected';
+                statusText.textContent = 'Đã kết nối Firebase';
+            } else {
+                statusIndicator.className = 'status-indicator disconnected';
+                statusText.textContent = 'Mất kết nối';
+            }
+        });
 
-    <div class="card">
-      <h2>📝 Hoạt động & RFID</h2>
-      <div class="activity-log" id="activityLog">
-        <div class="empty-activity"><p>Chưa có hoạt động nào</p></div>
-      </div>
-    </div>
-  </div>
-</div>
+        // Cập nhật thời gian
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleString('vi-VN');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
 
-<audio id="alertSound" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+        // Lắng nghe Barrier Vào
+        database.ref('parking/barrierVao').on('value', (snapshot) => {
+            const status = snapshot.val() || 'CLOSED';
+            const element = document.getElementById('barrierVao');
+            const statusText = element.querySelector('.barrier-status');
+            
+            if (status === 'OPEN') {
+                element.className = 'barrier-item open';
+                statusText.className = 'barrier-status open';
+                statusText.textContent = '✅ MỞ';
+            } else {
+                element.className = 'barrier-item closed';
+                statusText.className = 'barrier-status closed';
+                statusText.textContent = '🔒 ĐÓNG';
+            }
+        });
 
-<script>
-/*
-  Cấu hình MQTT (sửa HOST nếu cần)
-  Lưu ý:
-   - Browser MQTT cần websocket endpoint. Với HiveMQ Cloud thường là port 8884 và path /mqtt
-   - Nếu broker của bạn khác, hãy cập nhật mqttBroker hợp lý.
-*/
-const mqttHost = "wss://9e248d5939004b50ba39f2f789574339.s1.eu.hivemq.cloud:8884/mqtt";
-const mqttUser = "cloud";
-const mqttPass = "Anhtuan123";
+        // Lắng nghe Barrier Ra
+        database.ref('parking/barrierRa').on('value', (snapshot) => {
+            const status = snapshot.val() || 'CLOSED';
+            const element = document.getElementById('barrierRa');
+            const statusText = element.querySelector('.barrier-status');
+            
+            if (status === 'OPEN') {
+                element.className = 'barrier-item open';
+                statusText.className = 'barrier-status open';
+                statusText.textContent = '✅ MỞ';
+            } else {
+                element.className = 'barrier-item closed';
+                statusText.className = 'barrier-status closed';
+                statusText.textContent = '🔒 ĐÓNG';
+            }
+        });
 
-// Tạo kết nối
-const client = mqtt.connect(mqttHost, {
-  username: mqttUser,
-  password: mqttPass,
-  reconnectPeriod: 2000,
-  connectTimeout: 30000,
-  clientId: 'web_dashboard_' + Math.random().toString(16).substr(2,8)
-});
+        // Lắng nghe cảm biến IR
+        database.ref('parking/IR_SAU_VAO').on('value', (snapshot) => {
+            const status = snapshot.val() || 'TRONG';
+            const element = document.getElementById('sensorSauVao');
+            element.querySelector('.sensor-value').textContent = status;
+            if (status === 'CO XE') {
+                element.classList.add('active');
+            } else {
+                element.classList.remove('active');
+            }
+        });
 
-// Trạng thái slot local
-const slotStates = {1:'unknown',2:'unknown',3:'unknown',4:'unknown'};
-const activities = [];
-const maxActivities = 30;
+        database.ref('parking/IR_SAU_RA').on('value', (snapshot) => {
+            const status = snapshot.val() || 'TRONG';
+            const element = document.getElementById('sensorSauRa');
+            element.querySelector('.sensor-value').textContent = status;
+            if (status === 'CO XE') {
+                element.classList.add('active');
+            } else {
+                element.classList.remove('active');
+            }
+        });
 
-// UI helpers
-function addActivity(icon, text){
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-  activities.unshift({icon,text,time:timeStr});
-  if(activities.length>maxActivities) activities.pop();
-  renderActivity();
-  try{ document.getElementById('alertSound').play(); } catch(e){}
-}
+        // Lắng nghe Parking Slots
+        for (let i = 1; i <= 4; i++) {
+            database.ref(`parking/slot${i}`).on('value', (snapshot) => {
+                const status = snapshot.val() || 'TRONG';
+                const element = document.getElementById(`slot${i}`);
+                const statusText = element.querySelector('.slot-status');
+                
+                if (status === 'CO XE') {
+                    element.className = 'parking-slot occupied';
+                    statusText.className = 'slot-status occupied';
+                    statusText.textContent = '❌ Có xe';
+                    element.querySelector('.slot-icon').textContent = '🚗';
+                } else {
+                    element.className = 'parking-slot available';
+                    statusText.className = 'slot-status available';
+                    statusText.textContent = '✅ Trống';
+                    element.querySelector('.slot-icon').textContent = '🅿️';
+                }
+                
+                updateSummary();
+            });
+        }
 
-function renderActivity(){
-  const el = document.getElementById('activityLog');
-  if(activities.length===0){
-    el.innerHTML = '<div class="empty-activity"><p>Chưa có hoạt động nào</p></div>';
-    return;
-  }
-  el.innerHTML = activities.map((a,idx) => `
-    <div class="activity-item ${idx===0?'new':''}">
-      <div class="activity-icon">${a.icon}</div>
-      <div style="flex:1">
-        <div class="activity-text">${a.text}</div>
-        <div class="activity-time">${a.time}</div>
-      </div>
-    </div>
-  `).join('');
-}
+        // Cập nhật tổng kết
+        function updateSummary() {
+            let occupied = 0;
+            for (let i = 1; i <= 4; i++) {
+                const element = document.getElementById(`slot${i}`);
+                if (element.classList.contains('occupied')) {
+                    occupied++;
+                }
+            }
+            document.getElementById('occupiedSlots').textContent = occupied;
+            document.getElementById('availableSlots').textContent = 4 - occupied;
+        }
 
-// Kết nối / trạng thái
-function setConnection(connected){
-  const el = document.getElementById('connectionStatus');
-  if(connected){
-    el.className = 'connection-status connected';
-    el.textContent = '✅ Đã kết nối MQTT';
-  } else {
-    el.className = 'connection-status disconnected';
-    el.textContent = '⚠️ Mất kết nối';
-  }
-}
-
-// Thống kê
-function updateStats(){
-  const occ = Object.values(slotStates).filter(s => s==='occupied').length;
-  const avail = Object.values(slotStates).filter(s => s==='available').length;
-  document.getElementById('occupiedSlots').textContent = occ;
-  document.getElementById('availableSlots').textContent = avail;
-  document.getElementById('totalSlots').textContent = Object.keys(slotStates).length;
-}
-
-// Cập nhật slot UI
-function updateSlotUI(slotId, status){
-  const slotEl = document.getElementById('slot' + slotId);
-  if(!slotEl) return;
-  const span = slotEl.querySelector('.slot-status');
-  if(status === 'occupied'){
-    slotEl.className = 'parking-slot occupied';
-    span.textContent = 'Có xe';
-    slotStates[slotId] = 'occupied';
-    addActivity('🚘', `Xe vào chỗ P${slotId}`);
-  } else if(status === 'available'){
-    slotEl.className = 'parking-slot available';
-    span.textContent = 'Trống';
-    slotStates[slotId] = 'available';
-    addActivity('🚙', `Xe rời khỏi P${slotId}`);
-  } else {
-    slotEl.className = 'parking-slot unknown';
-    span.textContent = 'Chờ...';
-    slotStates[slotId] = 'unknown';
-  }
-  updateStats();
-}
-
-// Cập nhật barrier UI (dựa vào status messages từ ESP)
-function updateBarrierUI(type, isOpen){
-  const btn = document.getElementById(type === 'vao' ? 'barrierVao' : 'barrierRa');
-  const statusSpan = btn.querySelector('.barrier-status');
-  const iconSpan = btn.querySelector('.barrier-icon');
-  if(isOpen){
-    btn.classList.add('active');
-    statusSpan.textContent = 'Mở';
-    iconSpan.textContent = '⬆️';
-  } else {
-    btn.classList.remove('active');
-    statusSpan.textContent = 'Đóng';
-    iconSpan.textContent = '⬇️';
-  }
-}
-
-// Gửi lệnh barrier
-function sendBarrierCommand(type, action){
-  // type = 'vao' | 'ra'; action = 'OPEN' | 'CLOSE'
-  const payload = `${action}_${type.toUpperCase()}`; // e.g. OPEN_VAO
-  client.publish('barrier', payload);
-  addActivity('🚧', `${action === 'OPEN' ? 'Mở' : 'Đóng'} barrier ${type.toUpperCase()} (gửi lệnh)`);
-}
-
-// Event nút
-document.getElementById('barrierVao').addEventListener('click', () => {
-  // Vị trí này chỉ toggle UI; thao tác thực thi hãy dùng OPEN/ CLOSE nút dưới
-  const isOpen = document.getElementById('barrierVao').classList.contains('active');
-  updateBarrierUI('vao', !isOpen);
-  // không tự gửi lệnh on toggle để tránh xung đột; user nên dùng nút mở/đóng
-});
-document.getElementById('barrierRa').addEventListener('click', () => {
-  const isOpen = document.getElementById('barrierRa').classList.contains('active');
-  updateBarrierUI('ra', !isOpen);
-});
-
-document.getElementById('openVaoBtn').addEventListener('click', () => sendBarrierCommand('vao','OPEN'));
-document.getElementById('closeVaoBtn').addEventListener('click', () => sendBarrierCommand('vao','CLOSE'));
-document.getElementById('openRaBtn').addEventListener('click', () => sendBarrierCommand('ra','OPEN'));
-document.getElementById('closeRaBtn').addEventListener('click', () => sendBarrierCommand('ra','CLOSE'));
-
-// Xử lý kết nối MQTT
-client.on('connect', () => {
-  console.log('MQTT connected');
-  setConnection(true);
-  addActivity('✅','Kết nối MQTT thành công');
-  // Subscriptions phù hợp với code .ino
-  client.subscribe('parking/#', (err) => { if(!err) console.log('subbed parking/#') });
-  client.subscribe('status', (err) => { if(!err) console.log('subbed status') });
-  client.subscribe('rfid/scan', (err) => { if(!err) console.log('subbed rfid/scan') });
-  client.subscribe('barrier', (err) => { if(!err) console.log('subbed barrier') });
-});
-
-// Disconnect / offline / lỗi
-client.on('offline', () => { console.log('offline'); setConnection(false); addActivity('📵','MQTT offline'); });
-client.on('reconnect', () => { console.log('reconnect'); addActivity('🔁','Đang cố gắng kết nối lại MQTT'); });
-client.on('error', (err) => { console.error('MQTT error', err); setConnection(false); addActivity('❌','Lỗi MQTT: ' + (err.message||err)); });
-
-// Xử lý message
-client.on('message', (topic, payload) => {
-  const msg = payload ? payload.toString().trim() : '';
-  console.log(`[${topic}] ${msg}`);
-  // Slot messages: parking/slot1 .. slot4
-  if(topic.startsWith('parking/slot')){
-    // lấy số slot ở cuối
-    const slotIdStr = topic.replace('parking/slot','');
-    const slotId = parseInt(slotIdStr);
-    if(!isNaN(slotId) && slotId >=1 && slotId <=4){
-      if(msg.includes('CO XE') || msg.includes('OCCUPIED')) updateSlotUI(slotId,'occupied');
-      else if(msg.includes('TRONG') || msg.includes('AVAILABLE')) updateSlotUI(slotId,'available');
-      else updateSlotUI(slotId,'unknown');
-    }
-  } else if(topic === 'parking/IR_SAU_VAO' || topic === 'parking/IR_SAU_RA'){
-    // Cảm biến IR sau - hiển thị vào status
-    const id = topic === 'parking/IR_SAU_VAO' ? 'IR_SAU_VAO' : 'IR_SAU_RA';
-    document.getElementById('statusMsg').textContent = `${id}: ${msg}`;
-    addActivity('📡', `${id}: ${msg}`);
-  } else if(topic === 'status'){
-    // status có dạng: "BARRIER-VAO MỞ (RFID)" hoặc "ESP32 RECONNECTED", "HUONG KHONG XAC DINH (RFID)"
-    document.getElementById('statusMsg').textContent = msg;
-    addActivity('ℹ️', `STATUS: ${msg}`);
-    // parse barrier state nếu có
-    // Ví dụ: "BARRIER-VAO MỞ (RFID)" hoặc "BARRIER-RA ĐÓNG (MQTT)"
-    if(msg.includes('BARRIER-VAO')){
-      if(msg.includes('MỞ') || msg.toUpperCase().includes('OPEN')) updateBarrierUI('vao', true);
-      if(msg.includes('ĐÓNG') || msg.toUpperCase().includes('CLOSE')) updateBarrierUI('vao', false);
-    }
-    if(msg.includes('BARRIER-RA')){
-      if(msg.includes('MỞ') || msg.toUpperCase().includes('OPEN')) updateBarrierUI('ra', true);
-      if(msg.includes('ĐÓNG') || msg.toUpperCase().includes('CLOSE')) updateBarrierUI('ra', false);
-    }
-  } else if(topic === 'rfid/scan'){
-    // msg is UID
-    addActivity('💳', `RFID quét: ${msg}`);
-  } else if(topic === 'barrier'){
-    // Có thể broker echo lệnh hoặc ESP gửi phản hồi tới cùng topic
-    addActivity('🔔', `BARIER topic: ${msg}`);
-    // If someone publishes OPEN_VAO on barrier, we can reflect UI (optimistic)
-    if(msg === 'OPEN_VAO') updateBarrierUI('vao', true);
-    if(msg === 'CLOSE_VAO') updateBarrierUI('vao', false);
-    if(msg === 'OPEN_RA') updateBarrierUI('ra', true);
-    if(msg === 'CLOSE_RA') updateBarrierUI('ra', false);
-  } else {
-    // other topics
-    addActivity('📨', `[${topic}] ${msg}`);
-  }
-});
-
-// Init UI counts
-updateStats();
-renderActivity();
-
-</script>
+        // Lắng nghe Logs (lấy 20 log gần nhất)
+        const logsRef = database.ref('logs').orderByKey().limitToLast(1);
+        logsRef.on('child_added', (dateSnapshot) => {
+            const date = dateSnapshot.key;
+            const logsForDate = dateSnapshot.val();
+            
+            // Lấy tất cả logs trong ngày
+            const logEntries = Object.entries(logsForDate).reverse().slice(0, 20);
+            
+            const container = document.getElementById('logsContainer');
+            container.innerHTML = '';
+            
+            logEntries.forEach(([key, log]) => {
+                const logItem = document.createElement('div');
+                logItem.className = `log-item ${log.type.toLowerCase()}`;
+                
+                logItem.innerHTML = `
+                    <div class="log-message">
+                        <span class="log-type ${log.type.toLowerCase()}">${log.type}</span>
+                        ${log.message}
+                    </div>
+                    <div class="log-time">${log.time}</div>
+                `;
+                
+                container.appendChild(logItem);
+            });
+        });
+    </script>
 </body>
 </html>
