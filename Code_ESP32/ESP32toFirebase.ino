@@ -16,7 +16,6 @@ const char* password = "12345678";
 
 // --- Đối tượng Firebase ---
 FirebaseData fbdo;
-FirebaseData streamData;
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -55,7 +54,6 @@ bool servoRaState = false;
 const unsigned long CONFIRM_MS = 200;
 const unsigned long SLOT_CONFIRM_MS = 3000;
 const unsigned long RFID_DEBOUNCE_MS = 5000;
-const unsigned long AUTO_CLOSE_TIMEOUT = 15000; // 15 giây tự động đóng nếu không có xe đi qua
 
 // ====== Cấu trúc theo dõi IR ======
 struct IRTracker {
@@ -71,8 +69,6 @@ IRTracker irVao1, irVao2, irRa1, irRa2, slots[4];
 // ====== Trạng thái barrier ======
 bool openedByRFID_Vao = false;
 bool openedByRFID_Ra = false;
-unsigned long barrierVaoOpenTime = 0;  // Thời điểm mở rào VÀO
-unsigned long barrierRaOpenTime = 0;   // Thời điểm mở rào RA
 
 String authorizedCarName = "";
 String lastUid = ""; 
@@ -251,41 +247,6 @@ void completeTransaction(String uid) {
 // ====== LOGIC ĐIỀU KHIỂN VÀ CẢM BIẾN ======
 // =======================================================
 
-void streamCallback(StreamData data) {
-  if (data.dataType() == "string") {
-    String cmd = data.stringData();
-    String path = data.dataPath();
-
-    Firebase.setString(fbdo, path, "NONE");
-
-    if (path == "/commands/barrierVaoControl") {
-      if (cmd == "OPEN") {
-        setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "Manual");
-        openedByRFID_Vao = false; // Manual không theo dõi tự động đóng
-      } else if (cmd == "CLOSE") {
-        setServo(servoVao, servoVaoState, false, "BARRIER-VAO", "Manual");
-        openedByRFID_Vao = false;
-      }
-    } 
-    else if (path == "/commands/barrierRaControl") {
-      if (cmd == "OPEN") {
-        setServo(servoRa, servoRaState, true, "BARRIER-RA", "Manual");
-        openedByRFID_Ra = false;
-      } else if (cmd == "CLOSE") {
-        setServo(servoRa, servoRaState, false, "BARRIER-RA", "Manual");
-        openedByRFID_Ra = false;
-      }
-    }
-  }
-}
-
-void streamTimeoutCallback(bool timeout) {
-  if (timeout) {
-    Serial.println("⚠️ Stream timeout, đang kết nối lại...");
-    firebaseReady = false;
-  }
-}
-
 bool isUidAuthorized(String uid) {
   if (!firebaseReady) return false;
   
@@ -318,11 +279,14 @@ void updateTotalStatus() {
   
   updateFirebaseState("/parking/total_occupied", String(occupied));
   updateFirebaseState("/parking/total_free", String(free));
-  Serial.printf("Tổng quan: %d chiếm, %d trống.\n", occupied, free);
+  Serial.printf("📊 Tổng quan: %d chiếm, %d trống.\n", occupied, free);
 }
 
 void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char* source) {
-  if (stateVar == open) return;
+  if (stateVar == open) {
+    Serial.printf("⚠️ %s đã ở trạng thái %s rồi!\n", which, open ? "MỞ" : "ĐÓNG");
+    return;
+  }
 
   int targetOpen, targetClosed;
   if (strcmp(which, "BARRIER-VAO") == 0) {
@@ -337,19 +301,21 @@ void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char
   s.write(target);
   stateVar = open;
 
-  if (strcmp(which, "BARRIER-VAO") == 0 && !open) {
-    openedByRFID_Vao = false;
-    irVao2.sawLowAfterOpen = false;
-    barrierVaoOpenTime = 0;
-  }
-  if (strcmp(which, "BARRIER-RA") == 0 && !open) {
-    openedByRFID_Ra = false;
-    irRa2.sawLowAfterOpen = false;
-    barrierRaOpenTime = 0;
+  // Reset flags khi đóng barrier
+  if (!open) {
+    if (strcmp(which, "BARRIER-VAO") == 0) {
+      openedByRFID_Vao = false;
+      irVao2.sawLowAfterOpen = false;
+    } else {
+      openedByRFID_Ra = false;
+      irRa2.sawLowAfterOpen = false;
+    }
   }
 
   String msg = String(which) + (open ? " MỞ (" : " ĐÓNG (") + String(source) + ")";
+  Serial.println("🚧 " + msg);
   firebaseLog("Barrier", msg); 
+  
   String statePath = (strcmp(which, "BARRIER-VAO") == 0) ? "/parking/barrierVao" : "/parking/barrierRa";
   updateFirebaseState(statePath, open ? "OPEN" : "CLOSED");
 }
@@ -357,7 +323,7 @@ void setServo(Servo &s, bool &stateVar, bool open, const char* which, const char
 void initTracker(IRTracker &t, int pin) {
   if (pin >= 32 && pin <= 39) {
     pinMode(pin, INPUT);
-    Serial.printf("Pin %d là INPUT_ONLY.\n", pin);
+    Serial.printf("📌 Pin %d là INPUT_ONLY.\n", pin);
   } else {
     pinMode(pin, INPUT_PULLUP);
   }
@@ -369,7 +335,8 @@ void initTracker(IRTracker &t, int pin) {
   t.sawLowAfterOpen = false;
 }
 
-void handleBefore(IRTracker &t) {
+// Hàm xử lý IR1 (cảm biến TRƯỚC rào) - CẬP NHẬT LÊN FIREBASE
+void handleBefore(IRTracker &t, const char* topicName) {
   int r = digitalRead(t.pin);
   if (r != t.lastRead) {
     t.lastChange = millis();
@@ -379,11 +346,17 @@ void handleBefore(IRTracker &t) {
   if (millis() - t.lastChange >= CONFIRM_MS) {
     if (t.stable != r) {
       t.stable = r;
-      Serial.printf("🔔 IR Pin %d thay đổi: %s\n", t.pin, r == LOW ? "LOW(Có xe)" : "HIGH(Trống)");
+      Serial.printf("🔔 IR Pin %d (%s) thay đổi: %s\n", t.pin, topicName, r == LOW ? "LOW(Có xe)" : "HIGH(Trống)");
+      
+      // CẬP NHẬT LÊN FIREBASE
+      String topic = String("parking/") + topicName;
+      String payload = (r == LOW ? "CO XE" : "TRONG");
+      updateFirebaseState(topic, payload);
     }
   }
 }
 
+// Hàm xử lý IR2 (cảm biến SAU rào) - Có logic đóng rào
 void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, Servo &servo, bool &servoState, const char* which) {
   int r = digitalRead(tAfter.pin);
   
@@ -392,26 +365,30 @@ void handleAfter(IRTracker &tAfter, bool &openedByRFID, const char* topicName, S
     tAfter.lastRead = r;
   }
   
+  // Chỉ xử lý khi trạng thái ổn định
   if (millis() - tAfter.lastChange >= CONFIRM_MS && r != tAfter.stable) {
     tAfter.stable = r;
     String topic = String("parking/") + topicName; 
     
     if (r == LOW) {
+      // Xe đến cảm biến sau
       Serial.printf("🚗 Xe đã đến cảm biến SAU (%s)\n", topicName);
       updateFirebaseState(topic, "CO XE");
       
-      if (openedByRFID) {
+      // Đánh dấu xe đã đi qua nếu barrier được mở bởi RFID
+      if (openedByRFID && servoState) {
         tAfter.sawLowAfterOpen = true;
         Serial.printf("✓ Đã đánh dấu xe đi qua %s\n", which);
       }
     } else {
-      Serial.printf("✓ Xe đã rời cảm biến SAU (%s)\n", topicName);
+      // Xe rời khỏi cảm biến sau
+      Serial.printf("✅ Xe đã rời cảm biến SAU (%s)\n", topicName);
       updateFirebaseState(topic, "TRONG");
       
-      // CHỈ ĐÓNG KHI: Rào được mở bởi RFID VÀ xe đã đi qua điểm giữa
-      if (openedByRFID && tAfter.sawLowAfterOpen) {
+      // CHỈ ĐÓNG KHI: Barrier đang mở VÀ đã được đánh dấu xe đi qua
+      if (servoState && openedByRFID && tAfter.sawLowAfterOpen) {
         Serial.printf("🔒 Đóng %s - Xe đã đi qua hoàn toàn\n", which);
-        setServo(servo, servoState, false, which, "IR_Passed");
+        setServo(servo, servoState, false, which, "IR_AutoClose");
       }
     }
   }
@@ -433,6 +410,7 @@ void handleSlots() {
         String topic = String("parking/slot") + String(i + 1);
         String payload = (r == LOW ? "CO XE" : "TRONG"); 
         
+        Serial.printf("🅿️ Slot %d: %s\n", i + 1, payload.c_str());
         updateFirebaseState(topic, payload);
         stateChanged = true; 
       }
@@ -466,7 +444,7 @@ void handleRFID() {
   lastUid = uid;
   lastTrigger = now;
   
-  Serial.printf("RFID Quét: %s\n", uid.c_str());
+  Serial.printf("📇 RFID Quét: %s\n", uid.c_str());
   firebaseLog("RFIDScan", uid); 
 
   if (isUidAuthorized(uid)) {
@@ -477,6 +455,7 @@ void handleRFID() {
                   vao == LOW ? "LOW(Có xe)" : "HIGH(Trống)", 
                   ra == LOW ? "LOW(Có xe)" : "HIGH(Trống)");
 
+    // Logic xác định hướng: VÀO hay RA
     if (vao == LOW && ra == HIGH) {
       Serial.println("✅ Điều kiện VÀO: IR_VAO_1=LOW && IR_RA_1=HIGH");
       if (!servoVaoState) {
@@ -484,52 +463,31 @@ void handleRFID() {
         setServo(servoVao, servoVaoState, true, "BARRIER-VAO", "RFID");
         openedByRFID_Vao = true;
         irVao2.sawLowAfterOpen = false;
-        barrierVaoOpenTime = millis(); // Ghi lại thời điểm mở
         startTransaction(uid, authorizedCarName);
       } else {
         Serial.println("⚠️ Rào VÀO đã mở rồi!");
       }
-    } else if (ra == LOW && vao == HIGH) {
+    } 
+    else if (ra == LOW && vao == HIGH) {
       Serial.println("✅ Điều kiện RA: IR_RA_1=LOW && IR_VAO_1=HIGH");
       if (!servoRaState) {
         Serial.println("➡️ Mở rào RA...");
         setServo(servoRa, servoRaState, true, "BARRIER-RA", "RFID");
         openedByRFID_Ra = true;
         irRa2.sawLowAfterOpen = false;
-        barrierRaOpenTime = millis(); // Ghi lại thời điểm mở
         completeTransaction(uid);
       } else {
         Serial.println("⚠️ Rào RA đã mở rồi!");
       }
-    } else {
-      Serial.printf("❌ HƯỚNG KHÔNG XÁC ĐỊNH - vao=%d, ra=%d\n", vao, ra);
+    } 
+    else {
+      Serial.printf("❌ HƯỚNG KHÔNG XÁC ĐỊNH - VAO:%d, RA:%d\n", vao, ra);
       firebaseLog("RFIDError", "HƯỚNG KHÔNG XÁC ĐỊNH - VAO:" + String(vao) + " RA:" + String(ra));
     }
-  } 
+  }
   
   rfid.PICC_HaltA();
   rfid.PCD_StopCrypto1();
-}
-
-// ====== HÀM KIỂM TRA TỰ ĐỘNG ĐÓNG RÀO ======
-void checkAutoClose() {
-  unsigned long now = millis();
-  
-  // Kiểm tra Barrier VÀO
-  if (openedByRFID_Vao && servoVaoState && barrierVaoOpenTime > 0) {
-    if (now - barrierVaoOpenTime > AUTO_CLOSE_TIMEOUT) {
-      Serial.println("⏰ Timeout! Tự động đóng rào VÀO sau 15 giây");
-      setServo(servoVao, servoVaoState, false, "BARRIER-VAO", "Timeout");
-    }
-  }
-  
-  // Kiểm tra Barrier RA
-  if (openedByRFID_Ra && servoRaState && barrierRaOpenTime > 0) {
-    if (now - barrierRaOpenTime > AUTO_CLOSE_TIMEOUT) {
-      Serial.println("⏰ Timeout! Tự động đóng rào RA sau 15 giây");
-      setServo(servoRa, servoRaState, false, "BARRIER-RA", "Timeout");
-    }
-  }
 }
 
 void initFirebaseNodes() {
@@ -537,16 +495,6 @@ void initFirebaseNodes() {
   
   Serial.println("⚙️ Khởi tạo node Firebase...");
 
-  String commandsPath = "/commands";
-  if (!Firebase.get(fbdo, commandsPath)) { 
-    FirebaseJson json;
-    json.set("barrierVaoControl", "NONE"); 
-    json.set("barrierRaControl", "NONE");
-    if (Firebase.setJSON(fbdo, commandsPath, json)) {
-      Serial.println("✅ Tạo /commands");
-    }
-  }
-  
   String uidsPath = "/authorized_uids";
   if (!Firebase.get(fbdo, uidsPath)) { 
     if (Firebase.setString(fbdo, uidsPath + "/00000000", "Sample_User")) {
@@ -558,6 +506,15 @@ void initFirebaseNodes() {
   if (!Firebase.get(fbdo, parkingPath + "/total_occupied")) {
     updateFirebaseState(parkingPath + "/total_occupied", "0");
     updateFirebaseState(parkingPath + "/total_free", "4");
+    updateFirebaseState(parkingPath + "/barrierVao", "CLOSED");
+    updateFirebaseState(parkingPath + "/barrierRa", "CLOSED");
+    
+    // Khởi tạo trạng thái IR1 và IR2
+    updateFirebaseState(parkingPath + "/IR_VAO_1", "TRONG");
+    updateFirebaseState(parkingPath + "/IR_VAO_2", "TRONG");
+    updateFirebaseState(parkingPath + "/IR_RA_1", "TRONG");
+    updateFirebaseState(parkingPath + "/IR_RA_2", "TRONG");
+    
     Serial.println("✅ Tạo trạng thái đỗ xe");
   }
 }
@@ -570,11 +527,6 @@ void checkFirebaseConnection() {
       initFirebase();
       if (firebaseReady) {
         initFirebaseNodes();
-        
-        if (Firebase.beginStream(streamData, "/commands")) {
-          Firebase.setStreamCallback(streamData, streamCallback, streamTimeoutCallback);
-          Serial.println("✅ Stream đã được khởi động lại");
-        }
       }
       lastReconnect = now;
     }
@@ -583,12 +535,14 @@ void checkFirebaseConnection() {
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("\n\n=== KHỞI ĐỘNG HỆ THỐNG ===");
+  Serial.println("\n\n=== KHỞI ĐỘNG HỆ THỐNG PARKING TỰ ĐỘNG ===");
 
+  // Khởi tạo RFID
   SPI.begin(RFID_SCK, RFID_MISO, RFID_MOSI);
   rfid.PCD_Init();
   Serial.println("✅ RFID Initialized");
 
+  // Khởi tạo IR Sensors
   initTracker(irVao1, IR_VAO_1);
   initTracker(irVao2, IR_VAO_2);
   initTracker(irRa1, IR_RA_1);
@@ -596,14 +550,16 @@ void setup() {
   for (int i = 0; i < 4; i++) initTracker(slots[i], IR_PARK[i]);
   Serial.println("✅ IR Trackers Initialized");
   
+  // Khởi tạo Servos
   servoVao.attach(SERVO_VAO_PIN, 500, 2500);
   servoRa.attach(SERVO_RA_PIN, 500, 2500);
   servoVao.write(SERVO_VAO_CLOSED);
   servoRa.write(SERVO_RA_CLOSED);
-  Serial.println("✅ Servos Initialized");
+  Serial.println("✅ Servos Initialized (Đã đóng)");
 
+  // Kết nối WiFi
   WiFi.begin(ssid, password);
-  Serial.print("Kết nối WiFi");
+  Serial.print("🌐 Kết nối WiFi");
   int wifiRetries = 0;
   while (WiFi.status() != WL_CONNECTED && wifiRetries < 20) {
     delay(500);
@@ -613,46 +569,48 @@ void setup() {
   
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n✅ WiFi đã kết nối!");
-    Serial.print("IP: ");
+    Serial.print("📍 IP: ");
     Serial.println(WiFi.localIP());
   } else {
     Serial.println("\n❌ Không thể kết nối WiFi!");
     return;
   }
 
+  // Đồng bộ thời gian NTP
   configTime(7 * 3600, 0, "pool.ntp.org", "time.nist.gov");
   Serial.println("⏰ Đồng bộ NTP...");
   delay(2000);
 
+  // Khởi tạo Firebase
   initFirebase();
   if (firebaseReady) {
     initFirebaseNodes();
-    
-    if (Firebase.beginStream(streamData, "/commands")) {
-      Firebase.setStreamCallback(streamData, streamCallback, streamTimeoutCallback);
-      Serial.println("✅ Stream đã được khởi động");
-    } else {
-      Serial.println("❌ Lỗi khởi động stream: " + streamData.errorReason());
-    }
-    
     updateTotalStatus();
   }
 
-  Serial.println("=== HỆ THỐNG SẴN SÀNG ===\n");
+  Serial.println("\n=== HỆ THỐNG SẴN SÀNG ===");
+  Serial.println("🎯 Chế độ: TỰ ĐỘNG HOÀN TOÀN");
+  Serial.println("   - Mở rào: RFID hợp lệ");
+  Serial.println("   - Đóng rào: Xe đi qua IR2");
+  Serial.println("   - IR1 & IR2: Cập nhật realtime lên Firebase\n");
 }
 
 void loop() {
+  // Kiểm tra kết nối Firebase
   checkFirebaseConnection();
   
-  handleBefore(irVao1);
-  handleBefore(irRa1);
+  // Xử lý các cảm biến IR (BỔ SUNG THAM SỐ topicName)
+  handleBefore(irVao1, "IR_VAO_1");  // ✅ CẬP NHẬT IR_VAO_1 LÊN FIREBASE
+  handleBefore(irRa1, "IR_RA_1");    // ✅ CẬP NHẬT IR_RA_1 LÊN FIREBASE
+  
   handleAfter(irVao2, openedByRFID_Vao, "IR_VAO_2", servoVao, servoVaoState, "BARRIER-VAO"); 
   handleAfter(irRa2, openedByRFID_Ra, "IR_RA_2", servoRa, servoRaState, "BARRIER-RA");
-  handleSlots();
-  handleRFID();
   
-  // QUAN TRỌNG: Kiểm tra tự động đóng
-  checkAutoClose();
+  // Xử lý parking slots
+  handleSlots();
+  
+  // Xử lý RFID
+  handleRFID();
   
   delay(10);
 }
