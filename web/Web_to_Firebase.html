@@ -4,165 +4,201 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản Lý Bãi Đỗ Xe</title>
+    <title>Quản Lý Bãi Đỗ Xe Thông Minh</title>
     <style>
         /* ================= RESET & BASE ================= */
+        :root {
+            --primary-color: #3b82f6;
+            --bg-color: #f0f2f5;
+            --text-main: #1e293b;
+            --text-sub: #64748b;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #eab308; /* Màu vàng cho Exit */
+            --card-bg: #ffffff;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f0f2f5; padding: 15px; }
+        
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: var(--bg-color); 
+            padding: 15px;
+            color: var(--text-main);
+        }
+
         .container { max-width: 1600px; margin: 0 auto; }
 
         /* ================= HEADER ================= */
         header {
-            background: white; padding: 15px 20px; border-radius: 8px;
-            margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+            background: var(--card-bg); 
+            padding: 15px 20px; 
+            border-radius: 10px;
+            margin-bottom: 15px; 
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
             display: flex; justify-content: space-between; align-items: center;
         }
-        h1 { font-size: 1.5em; color: #1e293b; }
-        .connection-status { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: #64748b; }
+        h1 { font-size: 1.5em; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+        
+        .connection-status { display: flex; align-items: center; gap: 8px; font-size: 0.9em; color: var(--text-sub); background: #f8fafc; padding: 5px 10px; border-radius: 20px; border: 1px solid #e2e8f0; }
         .status-dot { width: 8px; height: 8px; border-radius: 50%; animation: pulse 2s infinite; }
-        .status-dot.connected { background: #22c55e; }
-        .status-dot.disconnected { background: #ef4444; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .status-dot.connected { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .status-dot.disconnected { background: var(--danger); }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
         /* ================= LAYOUT GRID ================= */
         .main-layout { display: grid; grid-template-columns: 3fr 7fr; gap: 15px; }
-        @media (max-width: 1200px) { .main-layout { grid-template-columns: 1fr; } }
+        @media (max-width: 1024px) { .main-layout { grid-template-columns: 1fr; } }
 
-        /* ================= CARDS ================= */
+        /* ================= CARDS COMMON ================= */
         .card {
-            background: white; border-radius: 8px; padding: 15px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08); display: flex; flex-direction: column;
+            background: var(--card-bg); border-radius: 10px; padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03); display: flex; flex-direction: column;
+            border: 1px solid #e2e8f0;
         }
         .card-title {
-            font-size: 1em; color: #1e293b; font-weight: 600; margin-bottom: 12px;
+            font-size: 1em; color: var(--text-main); font-weight: 700; margin-bottom: 12px;
             padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
+            display: flex; justify-content: space-between; align-items: center;
         }
 
-        /* ================= STATS ================= */
+        /* ================= LEFT COLUMN COMPONENTS ================= */
+        /* Stats */
         .overview-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .stat-box { padding: 10px; border-radius: 6px; background: #f8fafc; border: 2px solid #e2e8f0; }
-        .stat-value { font-size: 1.8em; font-weight: bold; color: #1e293b; line-height: 1; }
-        .stat-label { margin-top: 4px; font-size: 0.85em; color: #64748b; }
+        .stat-box { padding: 15px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; }
+        .stat-value { font-size: 2em; font-weight: 800; color: var(--text-main); line-height: 1.2; }
+        .stat-label { font-size: 0.85em; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
 
-        /* ================= BARRIERS & SENSORS ================= */
+        /* Barriers */
         .barriers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .barrier-card {
-            border: 2px solid #e2e8f0; border-radius: 6px; padding: 10px;
-            background: #fafafa; display: flex; flex-direction: column; justify-content: center;
+            border: 2px solid #e2e8f0; border-radius: 8px; padding: 10px;
+            background: #fafafa; display: flex; flex-direction: column;
+            transition: all 0.3s ease;
         }
-        .barrier-card.open { border-color: #22c55e; background: #f0fdf4; }
-        .barrier-card.closed { border-color: #ef4444; background: #fef2f2; }
+        /* Cổng Vào: Xanh (Giữ nguyên) */
+        .barrier-card.open { border-color: var(--success); background: #f0fdf4; }
+        /* Cổng Ra: Vàng (Mới) */
+        .barrier-card.exit-open { border-color: var(--warning); background: #fefce8; }
+        /* Đóng: Đỏ */
+        .barrier-card.closed { border-color: var(--danger); background: #fef2f2; }
+        
         .barrier-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-        .barrier-name { font-size: 0.9em; font-weight: 600; color: #475569; }
-        .barrier-status { font-size: 0.9em; font-weight: bold; }
-        .barrier-status.open { color: #16a34a; }
-        .barrier-status.closed { color: #dc2626; }
+        .barrier-name { font-size: 0.9em; font-weight: 700; color: var(--text-sub); }
+        
+        .barrier-status { font-size: 0.85em; font-weight: 800; padding: 2px 6px; border-radius: 4px; }
+        .barrier-status.open { color: #15803d; background: #dcfce7; }
+        .barrier-status.exit-open { color: #854d0e; background: #fef9c3; } /* Text vàng đậm nền vàng nhạt */
+        .barrier-status.closed { color: #b91c1c; background: #fee2e2; }
 
-        .sensors-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .sensors-row { display: flex; flex-direction: column; gap: 6px; }
         .sensor-badge {
-            padding: 6px 8px; border-radius: 4px; text-align: center;
+            padding: 5px 8px; border-radius: 4px; text-align: center;
             font-size: 0.75em; border: 1px solid #e2e8f0; font-weight: 600; transition: all 0.3s;
+            display: flex; justify-content: space-between;
         }
-        /* Màu sắc cảm biến IR */
-        .sensor-badge.empty { background: #f0fdf4; color: #15803d; border-color: #22c55e; } /* Trống - Xanh */
-        .sensor-badge.occupied { background: #fef2f2; color: #b91c1c; border-color: #ef4444; } /* Có xe - Đỏ */
-        .sensor-badge.unknown { background: #f1f5f9; color: #64748b; }
+        .sensor-badge.empty { background: #fff; color: var(--success); border-color: var(--success); }
+        .sensor-badge.occupied { background: #fee2e2; color: var(--danger); border-color: var(--danger); }
+        .sensor-badge.unknown { background: #f1f5f9; color: var(--text-sub); }
 
-        /* ================= PARKING SLOTS ================= */
+        /* Slots */
         .slots-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
         .slot-card {
-            border: 2px solid #e2e8f0; border-radius: 6px; padding: 10px;
-            text-align: center; background: #fafafa; transition: all 0.3s;
+            border: 2px solid #e2e8f0; border-radius: 8px; padding: 15px 10px;
+            text-align: center; background: #fafafa; transition: all 0.3s; position: relative;
         }
-        .slot-card.occupied { background: #fef2f2; border-color: #ef4444; }
-        .slot-card.available { background: #f0fdf4; border-color: #22c55e; }
-        .slot-number { font-size: 0.9em; font-weight: 600; color: #475569; margin-bottom: 4px; }
-        .slot-status { font-size: 0.85em; font-weight: 600; }
-        .slot-status.occupied { color: #dc2626; }
-        .slot-status.available { color: #16a34a; }
+        .slot-card.occupied { background: #fee2e2; border-color: var(--danger); }
+        .slot-card.available { background: #dcfce7; border-color: var(--success); }
+        .slot-number { font-size: 1em; font-weight: 700; color: var(--text-sub); margin-bottom: 5px; }
+        .slot-status { font-size: 0.9em; font-weight: 600; }
+        .slot-status.occupied { color: #b91c1c; }
+        .slot-status.available { color: #15803d; }
+        .slot-icon { font-size: 1.5em; display: block; margin-bottom: 5px; }
 
-        /* ================= RIGHT PANEL ================= */
-        .right-panel { display: flex; flex-direction: column; gap: 15px; }
+        /* ================= RIGHT COLUMN COMPONENTS ================= */
+        .right-panel { display: flex; flex-direction: column; gap: 15px; height: 100%; }
 
-        /* === [CSS MỚI] XE ĐANG ĐỖ (SESSIONS) - NGANG HÀNG === */
-        .sessions-compact { max-height: 250px; overflow-y: auto; }
-        
+        /* Active Sessions */
+        .sessions-compact { 
+            max-height: 200px; overflow-y: auto; 
+            padding-right: 5px;
+        }
         .session-item {
-            padding: 12px 15px; margin-bottom: 6px; border-radius: 6px;
-            background: #f8fafc; border-left: 4px solid #3b82f6;
-            border: 1px solid #e2e8f0; border-left-width: 4px; /* Giữ border trái màu xanh */
-            
-            /* Dàn hàng ngang */
-            display: flex; 
-            justify-content: space-between; 
-            align-items: center;
-            font-size: 0.9em;
+            padding: 10px 12px; margin-bottom: 8px; border-radius: 6px;
+            background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid var(--primary-color);
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.9em; transition: transform 0.1s;
         }
-
-        .session-details {
-            display: flex;
-            align-items: center;
-            gap: 10px; /* Khoảng cách giữa các thành phần */
-            color: #475569;
-        }
-
-        .sess-car { font-weight: bold; color: #1e293b; }
+        .session-item:hover { transform: translateX(2px); background: #fff; }
+        
+        .session-details { display: flex; align-items: center; gap: 12px; color: var(--text-sub); }
+        .sess-car { font-weight: 700; color: var(--text-main); }
         .sess-uid { font-family: monospace; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
-        .sess-time { color: #64748b; font-size: 0.9em; }
+        .sess-time { color: var(--text-sub); font-size: 0.85em; display: flex; align-items: center; gap: 4px; }
         
         .session-duration-badge { 
-            font-weight: 700; color: #2563eb; background: #dbeafe; 
-            padding: 4px 8px; border-radius: 20px; font-size: 0.85em;
-            white-space: nowrap;
+            font-weight: 700; color: var(--primary-color); background: #dbeafe; 
+            padding: 4px 10px; border-radius: 12px; font-size: 0.8em; white-space: nowrap;
         }
 
-        .empty-message { text-align: center; padding: 20px; color: #94a3b8; font-size: 0.9em; }
-
-        /* ================= LOGS & SCROLLBARS ================= */
+        /* Logs */
         .logs-wrapper {
             display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;
-            flex: 1; min-height: 0; height: 500px; max-height: 500px;
+            flex: 1; min-height: 400px; /* Cố định chiều cao tối thiểu */
         }
         .log-column {
             display: flex; flex-direction: column; border: 1px solid #e2e8f0;
-            border-radius: 6px; background: #f8fafc; overflow: hidden;
+            border-radius: 8px; background: #f8fafc; overflow: hidden; height: 100%;
         }
         .log-header {
-            padding: 8px; text-align: center; font-size: 0.85em; font-weight: bold;
-            background: #fff; border-bottom: 1px solid #e2e8f0; color: #475569;
+            padding: 10px; text-align: center; font-size: 0.85em; font-weight: 800;
+            background: #fff; border-bottom: 1px solid #e2e8f0; color: var(--text-sub);
             text-transform: uppercase; letter-spacing: 0.5px;
+            position: sticky; top: 0; z-index: 10;
         }
         .log-list {
             flex: 1; overflow-y: auto; padding: 10px;
+            max-height: 450px; /* Giới hạn chiều cao scroll */
         }
         .log-item {
-            padding: 8px 10px; margin-bottom: 4px; border-radius: 6px; background: white;
-            display: flex; justify-content: space-between; align-items: center;
-            font-size: 0.8em; border: 1px solid #e2e8f0;
+            padding: 8px 10px; margin-bottom: 6px; border-radius: 6px; background: white;
+            display: flex; flex-direction: column; gap: 2px;
+            font-size: 0.8em; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgba(0,0,0,0.02);
         }
-        .log-item.rfidaccess { border-left: 3px solid #22c55e; }
-        .log-item.rfiderror { border-left: 3px solid #ef4444; }
-        .log-item.sensor { border-left: 3px solid #3b82f6; }
+        .log-item.rfidaccess { border-left: 3px solid var(--success); }
+        .log-item.rfiderror { border-left: 3px solid var(--danger); }
+        
+        /* Cảm biến bình thường (Vào): Xanh dương */
+        .log-item.sensor { border-left: 3px solid var(--primary-color); }
+        
+        /* [MỚI] Cảm biến Cổng Ra (Exit): Vàng */
+        .log-item.sensor-exit { border-left: 3px solid var(--warning); }
+
+        /* Cảm biến lỗi: Đỏ */
+        .log-item.sensor-error { border-left: 3px solid var(--danger); }
+        
         .log-item.plate { border-left: 3px solid #8b5cf6; }
         
-        .log-content { flex: 1; color: #475569; }
-        .log-content strong { color: #1e293b; }
-        .log-time { color: #94a3b8; font-size: 0.9em; white-space: nowrap; margin-left: 8px; }
+        .log-content { color: var(--text-main); word-break: break-word; }
+        .log-time { color: #94a3b8; font-size: 0.9em; text-align: right; margin-top: 4px; }
 
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
+        .empty-message { text-align: center; padding: 20px; color: #94a3b8; font-size: 0.9em; font-style: italic; }
+
+        /* Custom Scrollbar (Cross Browser) */
+        * { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f5f9; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        .footer { text-align: center; color: #94a3b8; margin-top: 15px; font-size: 0.8em; }
+        .footer { text-align: center; color: #94a3b8; margin-top: 20px; font-size: 0.8em; }
     </style>
 </head>
 
 <body>
     <div class="container">
         <header>
-            <h1>🚗 Hệ Thống Bãi Đỗ Xe Thông Minh</h1>
+            <h1>🚗 Smart Parking System</h1>
             <div class="connection-status">
                 <span class="status-dot" id="statusDot"></span>
                 <span id="statusText">Đang kết nối...</span>
@@ -170,23 +206,26 @@
         </header>
 
         <div class="main-layout">
+            <!-- LEFT PANEL -->
             <div style="display: flex; flex-direction: column; gap: 15px;">
+                <!-- Stats -->
                 <div class="card">
-                    <div class="card-title">Tổng Quan Bãi Đỗ</div>
+                    <div class="card-title">Tổng Quan</div>
                     <div class="overview-stats">
                         <div class="stat-box">
                             <div class="stat-value">4</div>
                             <div class="stat-label">Tổng chỗ</div>
                         </div>
                         <div class="stat-box">
-                            <div class="stat-value" id="freeCount">--</div>
+                            <div class="stat-value" id="freeCount" style="color: var(--success)">--</div>
                             <div class="stat-label">Còn trống</div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Barriers -->
                 <div class="card">
-                    <div class="card-title">Cổng Vào / Ra (IR Sensors)</div>
+                    <div class="card-title">Cổng Kiểm Soát (Barriers)</div>
                     <div class="barriers-grid">
                         <div class="barrier-card" id="barrierVao">
                             <div class="barrier-header">
@@ -194,8 +233,8 @@
                                 <div class="barrier-status">--</div>
                             </div>
                             <div class="sensors-row">
-                                <div class="sensor-badge unknown" id="irVao1">Trước rào: --</div>
-                                <div class="sensor-badge unknown" id="irVao2">Sau rào: --</div>
+                                <div class="sensor-badge unknown" id="irVao1"><span>Trước:</span> <span>--</span></div>
+                                <div class="sensor-badge unknown" id="irVao2"><span>Sau:</span> <span>--</span></div>
                             </div>
                         </div>
                         <div class="barrier-card" id="barrierRa">
@@ -204,29 +243,34 @@
                                 <div class="barrier-status">--</div>
                             </div>
                             <div class="sensors-row">
-                                <div class="sensor-badge unknown" id="irRa1">Trước rào: --</div>
-                                <div class="sensor-badge unknown" id="irRa2">Sau rào: --</div>
+                                <div class="sensor-badge unknown" id="irRa1"><span>Trước:</span> <span>--</span></div>
+                                <div class="sensor-badge unknown" id="irRa2"><span>Sau:</span> <span>--</span></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
+                <!-- Slots -->
                 <div class="card">
-                    <div class="card-title">Sơ Đồ Chỗ Đỗ</div>
+                    <div class="card-title">Sơ Đồ Vị Trí</div>
                     <div class="slots-grid">
                         <div class="slot-card" id="slot1">
+                            <span class="slot-icon">🅿️</span>
                             <div class="slot-number">Vị trí 1</div>
                             <div class="slot-status">--</div>
                         </div>
                         <div class="slot-card" id="slot2">
+                            <span class="slot-icon">🅿️</span>
                             <div class="slot-number">Vị trí 2</div>
                             <div class="slot-status">--</div>
                         </div>
                         <div class="slot-card" id="slot3">
+                            <span class="slot-icon">🅿️</span>
                             <div class="slot-number">Vị trí 3</div>
                             <div class="slot-status">--</div>
                         </div>
                         <div class="slot-card" id="slot4">
+                            <span class="slot-icon">🅿️</span>
                             <div class="slot-number">Vị trí 4</div>
                             <div class="slot-status">--</div>
                         </div>
@@ -234,7 +278,9 @@
                 </div>
             </div>
 
+            <!-- RIGHT PANEL -->
             <div class="right-panel">
+                <!-- Active Sessions -->
                 <div class="card">
                     <div class="card-title">Xe Đang Đỗ (<span id="activeCount">0</span>)</div>
                     <div class="sessions-compact" id="sessionsContainer">
@@ -242,23 +288,24 @@
                     </div>
                 </div>
 
+                <!-- Logs -->
                 <div class="card" style="flex: 1;">
-                    <div class="card-title">Nhật Ký Hoạt Động</div>
+                    <div class="card-title">Nhật Ký Hoạt Động (Realtime)</div>
                     <div class="logs-wrapper">
                         <div class="log-column">
-                            <div class="log-header">📡 Hệ Thống</div>
+                            <div class="log-header">📡 Cảm biến</div>
                             <div class="log-list" id="logsSensors">
                                 <div class="empty-message">Đang tải...</div>
                             </div>
                         </div>
                         <div class="log-column">
-                            <div class="log-header">💳 Quẹt Thẻ</div>
+                            <div class="log-header">💳 Thẻ từ</div>
                             <div class="log-list" id="logsRFID">
                                 <div class="empty-message">Đang tải...</div>
                             </div>
                         </div>
                         <div class="log-column">
-                            <div class="log-header">📸 Camera Biển Số</div>
+                            <div class="log-header">📸 Camera AI</div>
                             <div class="log-list" id="logsLicensePlates">
                                 <div class="empty-message">Đang tải...</div>
                             </div>
@@ -273,11 +320,12 @@
         </div>
     </div>
 
+    <!-- FIREBASE SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <script>
-        // === 1. CẤU HÌNH FIREBASE ===
+        // ================= 1. CẤU HÌNH (GIỮ NGUYÊN KEY CỦA BẠN) =================
         const firebaseConfig_Car01 = {
             apiKey: "AIzaSyBYkMMtKTWIoWoqad8kQdjYy-Hdz3fOPaA",
             authDomain: "car01-351f6.firebaseapp.com",
@@ -298,13 +346,31 @@
             appId: "1:777570651447:web:5921b067a3ba5b003b1eb2"
         };
 
-        // Khởi tạo
+        // Khởi tạo Firebase
         firebase.initializeApp(firebaseConfig_Car01);
         const yoloApp = firebase.initializeApp(firebaseConfig_YOLO, 'yoloApp');
         const db = firebase.database();
         const db_yolo = yoloApp.database();
 
-        // === 2. TRẠNG THÁI KẾT NỐI ===
+        // ================= 2. TIỆN ÍCH XỬ LÝ NGÀY THÁNG =================
+        function parseCustomDate(dateStr, timeStr) {
+            if (!dateStr || !timeStr) return new Date();
+            const parts = dateStr.split(/[-/]/);
+            let d, m, y;
+            if (parts[0].length === 4) {
+                y = parseInt(parts[0]);
+                m = parseInt(parts[1]) - 1;
+                d = parseInt(parts[2]);
+            } else {
+                d = parseInt(parts[0]);
+                m = parseInt(parts[1]) - 1;
+                y = parseInt(parts[2]);
+            }
+            const timeParts = timeStr.split(':');
+            return new Date(y, m, d, parseInt(timeParts[0]), parseInt(timeParts[1]), 0);
+        }
+
+        // ================= 3. KẾT NỐI & TRẠNG THÁI =================
         db.ref('.info/connected').on('value', (snap) => {
             const dot = document.getElementById('statusDot');
             const text = document.getElementById('statusText');
@@ -321,34 +387,47 @@
             document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString('vi-VN');
         }, 1000);
 
-        // === 3. XỬ LÝ RÀO CHẮN ===
+        // ================= 4. XỬ LÝ BARRIERS (Update Vàng cho Exit) =================
         function updateBarrier(name, status) {
             const el = document.getElementById(`barrier${name}`);
             const statusEl = el.querySelector('.barrier-status');
+            
+            // Reset class trước
+            el.className = 'barrier-card';
+            statusEl.className = 'barrier-status';
+
             if (status === 'OPEN') {
-                el.className = 'barrier-card open';
-                statusEl.className = 'barrier-status open';
-                statusEl.textContent = 'ĐANG MỞ';
+                if (name === 'Ra') {
+                    // Cổng Ra: Màu Vàng
+                    el.classList.add('exit-open');
+                    statusEl.classList.add('exit-open');
+                } else {
+                    // Cổng Vào: Màu Xanh (Mặc định)
+                    el.classList.add('open');
+                    statusEl.classList.add('open');
+                }
+                statusEl.textContent = 'MỞ';
             } else {
-                el.className = 'barrier-card closed';
-                statusEl.className = 'barrier-status closed';
-                statusEl.textContent = 'ĐANG ĐÓNG';
+                // Cả 2 đóng: Màu Đỏ
+                el.classList.add('closed');
+                statusEl.classList.add('closed');
+                statusEl.textContent = 'ĐÓNG';
             }
         }
         db.ref('parking/barrierVAO').on('value', (s) => updateBarrier('Vao', s.val() || 'CLOSED'));
         db.ref('parking/barrierRA').on('value', (s) => updateBarrier('Ra', s.val() || 'CLOSED'));
 
-        // === 4. XỬ LÝ CẢM BIẾN IR (ĐỔI MÀU) ===
+        // Xử lý Cảm biến IR
         function updateSensor(id, status) {
             const el = document.getElementById(id);
-            const label = id.includes('1') ? 'Trước rào' : 'Sau rào';
+            const spanStatus = el.querySelectorAll('span')[1];
             
             if (status === 'CO_XE') {
                 el.className = 'sensor-badge occupied';
-                el.textContent = `${label}: CÓ XE`;
+                spanStatus.textContent = 'CÓ XE';
             } else {
                 el.className = 'sensor-badge empty';
-                el.textContent = `${label}: TRỐNG`;
+                spanStatus.textContent = 'TRỐNG';
             }
         }
         db.ref('parking/IR_VAO_1').on('value', (s) => updateSensor('irVao1', s.val() || 'TRONG'));
@@ -356,21 +435,24 @@
         db.ref('parking/IR_RA_1').on('value', (s) => updateSensor('irRa1', s.val() || 'TRONG'));
         db.ref('parking/IR_RA_2').on('value', (s) => updateSensor('irRa2', s.val() || 'TRONG'));
 
-        // === 5. XỬ LÝ CHỖ ĐỖ ===
+        // Xử lý Chỗ đỗ
         for (let i = 1; i <= 4; i++) {
             db.ref(`parking/slot${i}`).on('value', (snap) => {
                 const status = snap.val() || 'TRONG';
                 const card = document.getElementById(`slot${i}`);
                 const statusEl = card.querySelector('.slot-status');
+                const iconEl = card.querySelector('.slot-icon');
                 
                 if (status === 'CO_XE') {
                     card.className = 'slot-card occupied';
                     statusEl.className = 'slot-status occupied';
-                    statusEl.textContent = 'Có xe đỗ';
+                    statusEl.textContent = 'Có xe';
+                    iconEl.textContent = '🚗';
                 } else {
                     card.className = 'slot-card available';
                     statusEl.className = 'slot-status available';
-                    statusEl.textContent = 'Đang trống';
+                    statusEl.textContent = 'Trống';
+                    iconEl.textContent = '🅿️';
                 }
             });
         }
@@ -380,7 +462,7 @@
             document.getElementById('freeCount').textContent = 4 - occupied;
         });
 
-        // === 6. [SỬA ĐỔI] XE ĐANG ĐỖ - HIỂN THỊ NGANG ===
+        // ================= 5. XE ĐANG ĐỖ (SESSIONS) =================
         db.ref('sessions_active').on('value', (snap) => {
             const container = document.getElementById('sessionsContainer');
             const sessions = snap.val();
@@ -396,12 +478,9 @@
             container.innerHTML = '';
 
             arr.forEach(([uid, data]) => {
-                let timeString = data.time_in || '00:00';
-                let dateString = data.date_in || '';
                 let durationText = "Mới vào";
-
                 try {
-                    let entryTime = new Date(`${dateString}T${timeString}`);
+                    let entryTime = parseCustomDate(data.date_in, data.time_in);
                     let now = new Date();
                     let diffMs = now - entryTime;
                     
@@ -410,16 +489,15 @@
                         let mins = Math.floor((diffMs % 3600000) / 60000);
                         durationText = `${hours}h ${mins}p`;
                     }
-                } catch (e) { console.log(e); }
+                } catch (e) { console.warn("Time parse error", e); }
 
-                // Render HTML dạng ngang (Flex row)
                 const item = document.createElement('div');
                 item.className = 'session-item';
                 item.innerHTML = `
                     <div class="session-details">
-                        <span class="sess-car">${data.car_name || 'Xe ?'}</span>
+                        <span class="sess-car">${data.car_name || 'Xe khách'}</span>
                         <span class="sess-uid">${uid}</span>
-                        <span class="sess-time">🕒 ${timeString}</span>
+                        <span class="sess-time">🕒 ${data.time_in}</span>
                     </div>
                     <div class="session-duration-badge">${durationText}</div>
                 `;
@@ -427,11 +505,14 @@
             });
         });
 
-        // === 7. NHẬT KÝ (LOGS) ===
-        db.ref('logs').on('value', (snap) => {
+        // ================= 6. LOGS (XỬ LÝ TEXT & MÀU SẮC) =================
+        db.ref('logs').orderByKey().limitToLast(2).on('value', (snap) => {
             const allDateLogs = snap.val();
             const containerSensors = document.getElementById('logsSensors');
             const containerRFID = document.getElementById('logsRFID');
+
+            containerSensors.innerHTML = '';
+            containerRFID.innerHTML = '';
 
             if (!allDateLogs) {
                 containerSensors.innerHTML = '<div class="empty-message">Trống</div>';
@@ -439,53 +520,71 @@
                 return;
             }
 
-            containerSensors.innerHTML = '';
-            containerRFID.innerHTML = '';
+            let flatLogs = [];
+            Object.keys(allDateLogs).forEach(dateKey => {
+                const logsOfDay = allDateLogs[dateKey];
+                if (logsOfDay) {
+                    Object.values(logsOfDay).forEach(log => flatLogs.push(log));
+                }
+            });
 
-            const sortedDates = Object.keys(allDateLogs).sort().reverse();
-            const latestDate = sortedDates[0];
+            const recentLogs = flatLogs.slice(-100).reverse();
 
-            if(latestDate) {
-                const logsForDate = allDateLogs[latestDate];
-                const entries = Object.entries(logsForDate).reverse();
+            recentLogs.forEach(log => {
+                const type = log.type || 'SYSTEM';
+                const typeLower = type.toLowerCase();
+                let msg = log.message || '';
+                const time = log.time || '';
 
-                entries.forEach(([key, log]) => {
-                    const type = log.type || '';
-                    const typeLower = type.toLowerCase();
-                    const msg = log.message || '';
-                    const time = log.time || '';
+                // XỬ LÝ THAY THẾ TEXT (Translation)
+                msg = msg.replace(/Invalid direction/gi, "Hướng không xác định")
+                         .replace(/Duration/gi, "Thời gian gửi");
 
-                    const item = document.createElement('div');
+                const item = document.createElement('div');
+                let isRFID = typeLower.includes('rfid') || msg.includes('UID') || typeLower.includes('thẻ');
+                
+                if (isRFID) {
+                    let styleClass = 'rfidaccess';
+                    if (msg.includes('✗') || typeLower.includes('error') || msg.includes('Lỗi')) styleClass = 'rfiderror';
                     
-                    let isRFID = typeLower.includes('rfid') || msg.includes('UID');
+                    item.className = `log-item ${styleClass}`;
+                    item.innerHTML = `
+                        <div class="log-content"><strong>${type}:</strong> ${msg}</div>
+                        <div class="log-time">${time}</div>
+                    `;
+                    containerRFID.appendChild(item);
+                } else {
+                    // LOGIC CẢM BIẾN: 
+                    // 1. Check Lỗi -> Đỏ
+                    // 2. Check Cổng Ra (Exit) -> Vàng
+                    // 3. Mặc định (Vào) -> Xanh
                     
-                    if (isRFID) {
-                        let styleClass = 'rfidaccess';
-                        if (msg.includes('✗') || typeLower.includes('error')) styleClass = 'rfiderror';
-                        
-                        item.className = `log-item ${styleClass}`;
-                        item.innerHTML = `
-                            <div class="log-content"><strong>${type}:</strong> ${msg}</div>
-                            <div class="log-time">${time}</div>
-                        `;
-                        containerRFID.appendChild(item);
-                    } else {
-                        item.className = 'log-item sensor';
-                        item.innerHTML = `
-                            <div class="log-content"><strong>${type}:</strong> ${msg}</div>
-                            <div class="log-time">${time}</div>
-                        `;
-                        containerSensors.appendChild(item);
+                    let sensorClass = 'sensor'; // Mặc định xanh
+                    
+                    if (typeLower.includes('error') || msg.toLowerCase().includes('lỗi') || msg.toLowerCase().includes('error')) {
+                        sensorClass = 'sensor-error'; // Đỏ
+                    } 
+                    else if (typeLower.includes('ra') || msg.toLowerCase().includes('ra') || msg.toLowerCase().includes('exit')) {
+                        sensorClass = 'sensor-exit'; // Vàng (Mới thêm)
                     }
-                });
-            }
+
+                    item.className = `log-item ${sensorClass}`;
+                    item.innerHTML = `
+                        <div class="log-content"><strong>${type}:</strong> ${msg}</div>
+                        <div class="log-time">${time}</div>
+                    `;
+                    containerSensors.appendChild(item);
+                }
+            });
+
+            if (containerSensors.children.length === 0) containerSensors.innerHTML = '<div class="empty-message">Không có dữ liệu mới</div>';
+            if (containerRFID.children.length === 0) containerRFID.innerHTML = '<div class="empty-message">Không có dữ liệu mới</div>';
         });
 
-        // === 8. LOG BIỂN SỐ ===
+        // ================= 7. LOG BIỂN SỐ =================
         db_yolo.ref('detections').orderByKey().limitToLast(20).on('value', (snapshot) => {
             const data = snapshot.val();
             const containerPlates = document.getElementById('logsLicensePlates');
-
             containerPlates.innerHTML = '';
             
             if (!data) {
@@ -494,7 +593,6 @@
             }
 
             const arr = Object.values(data).reverse();
-
             arr.forEach(detection => {
                 if (!detection || !detection.plate) return;
                 const plate = detection.plate;
@@ -504,7 +602,7 @@
                 item.className = 'log-item plate';
                 item.innerHTML = `
                     <div class="log-content">
-                        <strong>BIỂN SỐ:</strong> <span style="font-size:1.1em; color:#8b5cf6">${plate}</span>
+                        <strong>BIỂN SỐ:</strong> <span style="font-size:1.2em; color:#8b5cf6; font-weight:bold">${plate}</span>
                     </div>
                     <div class="log-time">${timeStr}</div>
                 `;
