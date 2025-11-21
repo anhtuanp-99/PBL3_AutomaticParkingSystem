@@ -38,7 +38,7 @@ const int SERVO_VAO_OPEN = 90, SERVO_VAO_CLOSED = 180;
 const int SERVO_RA_OPEN = 90, SERVO_RA_CLOSED = 0;
 
 // ========== TIMING CONSTANTS ==========
-const unsigned long CONFIRM_MS = 100;           // Debounce cho IR
+const unsigned long CONFIRM_MS = 120;           // Debounce cho IR
 const unsigned long SLOT_CONFIRM_MS = 3000;     // Debounce cho parking slots
 const unsigned long RFID_DEBOUNCE_MS = 3000;    // Ngăn quét trùng RFID
 const unsigned long RECONNECT_INTERVAL = 30000; // Thử kết nối lại Firebase
